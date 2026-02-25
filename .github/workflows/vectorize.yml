@@ -3,6 +3,9 @@ name: Manual Image to Vector EPS
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   vectorize:
     runs-on: ubuntu-latest
