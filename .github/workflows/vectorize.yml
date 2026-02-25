@@ -1,0 +1,33 @@
+name: Manual Image to Vector EPS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  vectorize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install deps
+        run: |
+          pip install pillow numpy scikit-image reportlab
+
+      - name: Convert to vector EPS
+        run: |
+          python convert.py
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: manual-vector-${{ github.run_number }}
+          name: Manual Vector Release ${{ github.run_number }}
+          files: |
+            output_vector.eps
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
