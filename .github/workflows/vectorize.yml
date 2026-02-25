@@ -1,4 +1,4 @@
-name: Manual Ultimate Vector Pipeline
+name: Manual Ultimate Vector Pipeline FAST
 
 on:
   workflow_dispatch:
@@ -19,11 +19,9 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install dependencies
+      - name: Install dependencies (FAST MODE)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y python3-opencv
-          pip install pillow numpy scikit-image reportlab
+          pip install pillow numpy scikit-image reportlab opencv-python-headless
 
       - name: Run Ultimate Vector Engine
         run: |
@@ -37,8 +35,8 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ultimate-vector-${{ github.run_number }}
-          name: Ultimate Vector Release ${{ github.run_number }}
+          tag_name: ultimate-fast-${{ github.run_number }}
+          name: Ultimate Fast Vector Release ${{ github.run_number }}
           files: |
             outputs/*.eps
             outputs/*.svg
