@@ -1,7 +1,7 @@
 import os
 import cv2
 import numpy as np
-from PIL import Image, ImageOps, ImageEnhance
+from PIL import Image, ImageOps
 
 INPUT_DIR = "inputs"
 OUTPUT_DIR = "outputs"
@@ -11,11 +11,11 @@ def create_svg_path(contours, width, height):
     svg_header = f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg">\n'
     path_data = ""
     for cnt in contours:
-        if cv2.contourArea(cnt) < 20: continue
+        # Jangan terlalu pelit sama area, biar garis tipis nggak ilang
+        if cv2.contourArea(cnt) < 5: continue
         
-        # SMOOTHING LEVEL: Makin kecil epsilon, makin detail. 
-        # 0.0005 itu sweet spot buat ornamen lekuk.
-        epsilon = 0.0005 * cv2.arcLength(cnt, True)
+        # Smoothing yang beneran "paha girlband" tapi nggak ngilangin bentuk
+        epsilon = 0.0003 * cv2.arcLength(cnt, True)
         approx = cv2.approxPolyDP(cnt, epsilon, True)
         
         d = f"M {approx[0][0][0]} {approx[0][0][1]} "
@@ -31,36 +31,39 @@ def process_image():
 
         name = os.path.splitext(file)[0]
         input_path = os.path.join(INPUT_DIR, file)
-        print(f"🚀 Glow-up: {file}")
+        print(f"🚀 Tracing Ulang: {file}")
 
-        # 1. UPSCALING (Gedein 3x biar pixel-nya rapet)
-        img = Image.open(input_path).convert("L")
-        w, h = img.size
-        img = img.resize((w * 3, h * 3), Image.Resampling.LANCZOS)
+        # 1. LOAD MURNI
+        img_pil = Image.open(input_path).convert("L")
+        w, h = img_pil.size
         
-        # 2. ANTI-GRADAKAN FILTER (Gaussian Blur)
-        # Rahasianya di sini: dibikin agak ngeblur dikit biar "geriginya" ilang
-        arr = np.array(img)
-        arr = cv2.GaussianBlur(arr, (5, 5), 0)
+        # Upscale 2x aja biar gak berat tapi tetep tajem
+        img_pil = img_pil.resize((w * 2, h * 2), Image.Resampling.LANCZOS)
+        arr = np.array(img_pil)
 
-        # 3. KONTRAS JAHAT
-        _, bw = cv2.threshold(arr, 127, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+        # 2. ANTI-GAIB: Adaptive Threshold
+        # Ini bakal nangkep garis tipis di area manapun tanpa pandang bulu
+        bw = cv2.adaptiveThreshold(arr, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                   cv2.THRESH_BINARY_INV, 11, 2)
 
-        # 4. MORPHOLOGY (Biar garisnya nyambung & solid)
-        kernel = np.ones((3,3), np.uint8)
-        bw = cv2.morphologyEx(bw, cv2.MORPH_CLOSE, kernel)
+        # 3. CLEANING (Buat ngilangin bintik kecil tapi garis utama aman)
+        kernel = np.ones((2,2), np.uint8)
+        bw = cv2.morphologyEx(bw, cv2.MORPH_OPEN, kernel)
 
-        # 5. TRACING (Pake mode KCOS buat kurva)
-        contours, _ = cv2.findContours(bw, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_TC89_KCOS)
+        # 4. TRACING KELAS BERAT
+        contours, _ = cv2.findContours(bw, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_TC89_L1)
         
-        # 6. SAVE SVG
+        # 5. SAVE SVG
         h_bw, w_bw = bw.shape
         svg_content = create_svg_path(contours, w_bw, h_bw)
         
-        with open(os.path.join(OUTPUT_DIR, f"{name}.svg"), "w") as f:
+        svg_file = os.path.join(OUTPUT_DIR, f"{name}.svg")
+        with open(svg_file, "w") as f:
             f.write(svg_content)
             
-        print(f"✅ Ornamen siap! Udah mulus kayak paha... personil girlband. 😎")
+        # Cek size buat mastiin
+        file_size = os.path.getsize(svg_file) / 1024
+        print(f"✅ Kelar! Size: {file_size:.2f} KB | Path: {len(contours)}")
 
 if __name__ == "__main__":
     process_image()
