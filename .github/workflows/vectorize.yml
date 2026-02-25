@@ -1,4 +1,4 @@
-name: Manual Ultimate Vector Pipeline FAST
+name: Manual Ultimate Vector Pipeline FIX
 
 on:
   workflow_dispatch:
@@ -19,27 +19,30 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install dependencies (FAST MODE)
+      - name: Install Dependencies
         run: |
           pip install pillow numpy scikit-image reportlab opencv-python-headless
 
-      - name: Run Ultimate Vector Engine
+      - name: Run Corel-Style Trace Engine
         run: |
           python convert.py
 
       - name: Zip Outputs
         run: |
-          cd outputs
-          zip -r vectors.zip .
+          if [ -d "outputs" ]; then
+            cd outputs
+            zip -r ../vectors.zip .
+          fi
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
+        if: success()
         with:
-          tag_name: ultimate-fast-${{ github.run_number }}
-          name: Ultimate Fast Vector Release ${{ github.run_number }}
+          tag_name: v3-corel-logic-${{ github.run_number }}
+          name: Corel-Style Vector Release ${{ github.run_number }}
           files: |
             outputs/*.eps
             outputs/*.svg
-            outputs/vectors.zip
+            vectors.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
