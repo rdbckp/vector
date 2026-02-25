@@ -1,4 +1,4 @@
-name: Manual Image to Vector EPS
+name: Manual Ultimate Vector Pipeline
 
 on:
   workflow_dispatch:
@@ -9,28 +9,39 @@ permissions:
 jobs:
   vectorize:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Install deps
+      - name: Install dependencies
         run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-opencv
           pip install pillow numpy scikit-image reportlab
 
-      - name: Convert to vector EPS
+      - name: Run Ultimate Vector Engine
         run: |
           python convert.py
+
+      - name: Zip Outputs
+        run: |
+          cd outputs
+          zip -r vectors.zip .
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: manual-vector-${{ github.run_number }}
-          name: Manual Vector Release ${{ github.run_number }}
+          tag_name: ultimate-vector-${{ github.run_number }}
+          name: Ultimate Vector Release ${{ github.run_number }}
           files: |
-            output_vector.eps
+            outputs/*.eps
+            outputs/*.svg
+            outputs/vectors.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
