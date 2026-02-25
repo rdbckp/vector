@@ -19,50 +19,42 @@ def process_image():
         input_path = os.path.join(INPUT_DIR, file)
         print(f"🚀 Processing: {file}")
 
-        # 1. LOAD & UPSCALING (Set ke 333 DPI / Perbesar Resolusi)
-        img = Image.open(input_path)
+        # 1. LOAD & UPSCALING (Gedein biar detail dapet)
+        img = Image.open(input_path).convert("RGB")
         w, h = img.size
-        # Simulasi naik resolusi (Upscale 2x - 3x biar garis makin tajem)
-        new_size = (w * 3, h * 3)
-        img = img.resize(new_size, Image.Resampling.LANCZOS)
+        img = img.resize((w * 3, h * 3), Image.Resampling.LANCZOS)
 
-        # 2. INVERT LOGIC (Kalau warna dasarnya hitam, kita balik)
-        # Kita cek rata-rata pixel, kalau gelap, kita invert biar line-art nya jadi item
-        img_temp = img.convert("L")
-        stat = np.array(img_temp).mean()
-        if stat < 127: # Artinya dominan gelap/hitam
-            img = ImageOps.invert(img.convert("RGB"))
-            print("🔄 Inverting Colors (Black Background Detected)")
-
-        # 3. CONVERT TO GRAYSCALE
-        img = img.convert("L")
-
-        # 4. MEDIUM CONTRAST (Biar garis makin tegas)
-        enhancer = ImageEnhance.Contrast(img)
-        img = enhancer.enhance(1.5) # Naikin kontras 50%
-
-        # 5. CONVERT TO BLACK & WHITE (1-Bit Line Art Mode)
-        arr = np.array(img)
-        _, bw = cv2.threshold(arr, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-
-        # 6. TRACE BITMAP (High Quality Outline Trace)
-        # Bersihin noise dikit sebelum di-trace
-        kernel = np.ones((3,3), np.uint8)
-        bw = cv2.morphologyEx(bw, cv2.MORPH_OPEN, kernel, iterations=1)
+        # 2. CORE LOGIC (Grayscale & Contrast)
+        gray = ImageOps.grayscale(img)
+        enhancer = ImageEnhance.Contrast(gray)
+        gray = enhancer.enhance(2.0) # Makin galak kontrasnya
         
-        contours, _ = cv2.findContours(bw, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_TC89_L1)
+        arr = np.array(gray)
 
+        # 3. AUTO-INVERT SAKTI
+        # Cek pojok kiri atas (biasanya background). Kalau terang, berarti objeknya gelap.
+        bg_sample = arr[0:10, 0:10].mean()
+        if bg_sample > 127: 
+            # Background putih -> Objek hitam (Normal)
+            _, bw = cv2.threshold(arr, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+        else:
+            # Background hitam -> Objek terang (Invert)
+            _, bw = cv2.threshold(arr, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+        # 4. TRACING (Outline Mode)
+        contours, _ = cv2.findContours(bw, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
         h_bw, w_bw = bw.shape
         drawing = Drawing(w_bw, h_bw)
 
         path_count = 0
         for cnt in contours:
-            # Filter objek kecil banget (noise)
-            if cv2.contourArea(cnt) < 150:
+            # Saring yang beneran kecil doang (di bawah 10 pixel area)
+            if cv2.contourArea(cnt) < 10: 
                 continue
 
-            # Smoothing (Biar kayak paha girlband tadi, bray!)
-            epsilon = 0.0005 * cv2.arcLength(cnt, True)
+            # Mulusin dikit biar nggak kaku
+            epsilon = 0.0004 * cv2.arcLength(cnt, True)
             approx = cv2.approxPolyDP(cnt, epsilon, True)
 
             p = Path()
@@ -71,23 +63,24 @@ def process_image():
 
             for pt in approx[1:]:
                 x, y = pt[0]
-                p.lineTo(x, h_bw - y)
+                p.lineTo(x, h - y if 'h' in locals() else h_bw - y) # Fix koordinat
 
             p.closePath()
-            p.strokeColor = colors.black
-            p.fillColor = colors.black # Outline Trace Style
-            p.strokeWidth = 0.5
+            p.fillColor = colors.black # Biar muncul bentuk solid di Corel
+            p.strokeColor = None 
             drawing.add(p)
             path_count += 1
 
-        # 7. EXPORT EPS & SVG
+        if path_count == 0:
+            print(f"⚠️ Waduh! Gak ada objek ketemu di {file}. Cek gambarnya bray!")
+            continue
+
+        # 5. EXPORT
         eps_out = os.path.join(OUTPUT_DIR, f"{name}.eps")
         svg_out = os.path.join(OUTPUT_DIR, f"{name}.svg")
         renderPS.drawToFile(drawing, eps_out)
         renderSVG.drawToFile(drawing, svg_out)
-
-        print(f"✅ Berhasil! {path_count} Path dibuat.\n")
+        print(f"✅ Mantap! {path_count} objek berhasil di-trace.")
 
 if __name__ == "__main__":
     process_image()
-    print("=== SEMUA BERES, BOSS! ===")
