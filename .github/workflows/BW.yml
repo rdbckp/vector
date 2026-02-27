@@ -1,26 +1,30 @@
-name: Corel-Style Color to BW Pro (URL)
+name: Corel-Style BW Line Art (URL Input)
 
 on:
   workflow_dispatch:
     inputs:
       image_url:
-        description: 'Tempel Link URL Gambar'
+        description: 'Link URL Gambar'
         required: true
-      brightness:
+      dpi_resample:
+        description: 'Naikin DPI (Contoh: 300, 600, 1200)'
+        default: '600'
+        required: true
+      brightness_val:
         description: 'Brightness (-100 s/d 100)'
         default: '0'
         required: true
-      contrast:
+      contrast_val:
         description: 'Contrast (-100 s/d 100)'
         default: '0'
         required: true
       threshold_val:
-        description: 'Line Art Threshold (0-255) - Corel Default is 128 (50%)'
-        default: '128'
+        description: 'Option Threshold (Line Art Mode 1-bit)'
+        default: '50'
         required: true
 
 jobs:
-  convert-bw-pro:
+  convert-process:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -31,28 +35,29 @@ jobs:
       - name: Install ImageMagick
         run: sudo apt-get update && sudo apt-get install -y imagemagick
 
-      - name: Process Image (Corel X5 Line Art Logic)
+      - name: Execute Corel X5 Logic
         run: |
           # 1. Download Gambar
-          curl -L "${{ github.event.inputs.image_url }}" -o "source_image"
-          
-          if [ ! -s "source_image" ]; then
-            echo "❌ URL error, Bro!"
+          curl -L "${{ github.event.inputs.image_url }}" -o "raw_input"
+
+          if [ ! -s "raw_input" ]; then
+            echo "❌ Gagal download, cek linknya lagi Bro!"
             exit 1
           fi
 
-          # 2. Eksekusi ala Corel X5:
-          # -colorspace gray: Ubah ke 8-bit Grayscale
-          # -brightness-contrast: Sesuaikan input user
-          # -threshold: Pakai nilai absolut (0-255). 128 itu setara 50% di Corel.
-          # -depth 1: Pakai 1-bit biar jadi Line Art murni (item-putih tegas)
-          
-          convert source_image \
-                  -colorspace gray \
-                  -brightness-contrast ${{ github.event.inputs.brightness }}x${{ github.event.inputs.contrast }} \
-                  -threshold ${{ github.event.inputs.threshold_val }} \
-                  -depth 1 \
-                  "result_lineart.png"
+          # 2. Proses Transformasi (Dino Salto Style)
+          # -resample: Naikin DPI
+          # -colorspace gray -depth 8: Grayscale 8-bit
+          # -brightness-contrast: Sesuai input BCI Corel
+          # -threshold: Final 1-bit Line Art mode
+          convert raw_input \
+                  -density ${{ github.event.inputs.dpi_resample }} \
+                  -resample ${{ github.event.inputs.dpi_resample }} \
+                  -colorspace gray -depth 8 \
+                  -brightness-contrast ${{ github.event.inputs.brightness_val }}x${{ github.event.inputs.contrast_val }} \
+                  -threshold ${{ github.event.inputs.threshold_val }}% \
+                  -type bilevel \
+                  result_lineart.png
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -60,10 +65,11 @@ jobs:
           tag_name: "lineart-v${{ github.run_number }}"
           name: "Line Art Result #${{ github.run_number }}"
           body: |
-            **Settings Applied:**
-            - Brightness: ${{ github.event.inputs.brightness }}
-            - Contrast: ${{ github.event.inputs.contrast }}
-            - Threshold: ${{ github.event.inputs.threshold_val }}
+            **Tuning Specs:**
+            - DPI: ${{ github.event.inputs.dpi_resample }}
+            - Brightness: ${{ github.event.inputs.brightness_val }}
+            - Contrast: ${{ github.event.inputs.contrast_val }}
+            - Threshold: ${{ github.event.inputs.threshold_val }}%
           files: result_lineart.png
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
