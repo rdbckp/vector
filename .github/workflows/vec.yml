@@ -27,13 +27,13 @@ jobs:
           fi
 
           # --- TAHAP 1: MASAK BITMAP (ImageMagick) ---
-          # -density 300 & -resample: naikin DPI kayak Macro lo
-          # -threshold 60%: Sesuai 'Threshold:=60' di script lo
+          # -density 500 & -resample: naikin DPI kayak Macro lo
+          # -threshold 50%: Sesuai 'Threshold:=60' di script lo
           # -morphology: Nge-smooth garis biar gak rontok pas di-trace
           convert -density 300 input/image_b811fb.png \
-                  -resample 300 \
+                  -resample 500 \
                   -colorspace gray \
-                  -threshold 60% \
+                  -threshold 50% \
                   -blur 0x0.5 \
                   -morphology Smooth Octagon \
                   input/temp_cooked.bmp
