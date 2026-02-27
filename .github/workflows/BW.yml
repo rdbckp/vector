@@ -1,22 +1,26 @@
-name: Color to Black & White Converter (URL)
+name: Corel-Style Color to BW Pro (URL)
 
 on:
   workflow_dispatch:
     inputs:
       image_url:
-        description: 'Tempel Link URL Gambarnya (PNG/JPG/JPEG/BMP)'
+        description: 'Tempel Link URL Gambar'
         required: true
-      contrast_boost:
-        description: 'Naikin Kontras? (Ketik 0 buat normal, 20-50 buat nendang)'
-        default: '20'
+      brightness:
+        description: 'Brightness (-100 s/d 100)'
+        default: '0'
         required: true
-      output_format:
-        description: 'Format Hasil (png atau jpg)'
-        default: 'png'
+      contrast:
+        description: 'Contrast (-100 s/d 100)'
+        default: '0'
+        required: true
+      threshold_val:
+        description: 'Line Art Threshold (0-255) - Corel Default is 128 (50%)'
+        default: '128'
         required: true
 
 jobs:
-  convert-bw:
+  convert-bw-pro:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -27,35 +31,39 @@ jobs:
       - name: Install ImageMagick
         run: sudo apt-get update && sudo apt-get install -y imagemagick
 
-      - name: Download and Convert
+      - name: Process Image (Corel X5 Line Art Logic)
         run: |
-          # 1. Download gambar pake curl
+          # 1. Download Gambar
           curl -L "${{ github.event.inputs.image_url }}" -o "source_image"
           
-          # 2. Cek apakah download berhasil
           if [ ! -s "source_image" ]; then
-            echo "❌ URL-nya ngaco atau gambar gak bisa di-download, Bro!"
+            echo "❌ URL error, Bro!"
             exit 1
           fi
 
-          # 3. Proses ke Black & White
-          # -colorspace gray: Ngubah jadi abu-abu
-          # -sigmoidal-contrast: Naikin kontras biar item-putihnya tegas (pake input user)
-          # -sharpen: Biar detail tetep gahar
+          # 2. Eksekusi ala Corel X5:
+          # -colorspace gray: Ubah ke 8-bit Grayscale
+          # -brightness-contrast: Sesuaikan input user
+          # -threshold: Pakai nilai absolut (0-255). 128 itu setara 50% di Corel.
+          # -depth 1: Pakai 1-bit biar jadi Line Art murni (item-putih tegas)
+          
           convert source_image \
                   -colorspace gray \
-                  -sigmoidal-contrast ${{ github.event.inputs.contrast_boost }}x50% \
-                  -sharpen 0x1 \
-                  "result_bw.${{ github.event.inputs.output_format }}"
+                  -brightness-contrast ${{ github.event.inputs.brightness }}x${{ github.event.inputs.contrast }} \
+                  -threshold ${{ github.event.inputs.threshold_val }} \
+                  -depth 1 \
+                  "result_lineart.png"
 
-      - name: Create Release and Upload BW
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "bw-v${{ github.run_number }}"
-          name: "BW Result #${{ github.run_number }}"
+          tag_name: "lineart-v${{ github.run_number }}"
+          name: "Line Art Result #${{ github.run_number }}"
           body: |
-            **Image Source:** ${{ github.event.inputs.image_url }}
-            **Contrast Boost:** ${{ github.event.inputs.contrast_boost }}
-          files: result_bw.${{ github.event.inputs.output_format }}
+            **Settings Applied:**
+            - Brightness: ${{ github.event.inputs.brightness }}
+            - Contrast: ${{ github.event.inputs.contrast }}
+            - Threshold: ${{ github.event.inputs.threshold_val }}
+          files: result_lineart.png
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
