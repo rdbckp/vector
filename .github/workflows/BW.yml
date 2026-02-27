@@ -1,0 +1,71 @@
+name: Image to Black and White Converter
+
+on:
+  workflow_dispatch:
+    inputs:
+      file_name:
+        description: 'Nama File (Misal: goku_warna.png)'
+        default: 'input.png'
+        required: true
+      mode:
+        description: 'Pilih Mode: pure-bw (Line Art) atau grayscale (Abu-abu)'
+        default: 'pure-bw'
+        type: choice
+        options:
+          - pure-bw
+          - grayscale
+      threshold_percent:
+        description: 'Threshold (%) - Khusus pure-bw (makin kecil makin tipis)'
+        default: '50'
+        required: true
+
+jobs:
+  convert-bw:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install ImageMagick
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick
+
+      - name: Process Image
+        run: |
+          TARGET_FILE="${{ github.event.inputs.file_name }}"
+          
+          if [ ! -f "$TARGET_FILE" ]; then
+            echo "❌ File '$TARGET_FILE' kagak ada, Bro!"
+            exit 1
+          fi
+
+          if [ "${{ github.event.inputs.mode }}" == "pure-bw" ]; then
+            echo "🚀 Converting to Pure Black & White..."
+            convert "$TARGET_FILE" \
+                    -colorspace gray \
+                    -alpha remove \
+                    -threshold ${{ github.event.inputs.threshold_percent }}% \
+                    result_bw.png
+          else
+            echo "🚀 Converting to Grayscale..."
+            convert "$TARGET_FILE" \
+                    -colorspace gray \
+                    result_bw.png
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "bw-v${{ github.run_number }}"
+          name: "B&W Result #${{ github.run_number }}"
+          body: |
+            **Conversion Info:**
+            - Source: ${{ github.event.inputs.file_name }}
+            - Mode: ${{ github.event.inputs.mode }}
+            - Threshold: ${{ github.event.inputs.threshold_percent }}%
+          files: result_bw.png
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
