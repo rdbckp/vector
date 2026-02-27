@@ -16,12 +16,15 @@ jobs:
 
       - name: Convert PNG to SVG
         run: |
-          # Bikin folder output kalau belum ada
           mkdir -p output
-          # Proses semua gambar di folder input
-          # --mode spline bikin lekukan lebih mulus (smooth)
-          vtracer --input input/image_b811fb.png --output output/logo_vector.svg --mode spline --precision 3
-
+          vtracer \
+            --input input/image_b811fb.png \
+            --output output/logo_vector.svg \
+            --mode spline \
+            --path_precision 3 \
+            --corner_threshold 60 \
+            --splice_threshold 45
+            
       - name: Upload Result
         uses: actions/upload-artifact@v4
         with:
