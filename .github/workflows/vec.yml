@@ -1,32 +1,45 @@
-name: Image to SVG Converter
+name: Image to SVG Vector Pro
 
 on:
-  workflow_dispatch: # Biar bisa diklik "Run Workflow" manual
+  workflow_dispatch: # Tombol Manual Run di tab Actions
 
 jobs:
-  convert:
+  convert-process:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install Vtracer
-        run: |
-          cargo install vtracer
+      - name: Cache Cargo Registry
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-vtracer
 
-      - name: Convert PNG to SVG
+      - name: Install Vtracer Tool
+        run: cargo install vtracer
+
+      - name: Create Directories
+        run: mkdir -p output
+
+      - name: Execute Vectorization
+        # Penjelasan Parameter:
+        # --mode spline: Bikin kurva/lekukan mulus (beziér)
+        # --path_precision 3: Akurasi titik koordinat garis
+        # --filter_speckle 4: Hapus bintik/noise kecil ukuran < 4px
+        # --corner_threshold 60: Biar sudut sayap nggak patah-patah
         run: |
-          mkdir -p output
           vtracer \
             --input input/image_b811fb.png \
             --output output/logo_vector.svg \
             --mode spline \
             --path_precision 3 \
             --corner_threshold 60 \
-            --splice_threshold 45
-            
-      - name: Upload Result
+            --filter_speckle 4 \
+            --color_precision 8
+
+      - name: Upload SVG Result
         uses: actions/upload-artifact@v4
         with:
-          name: svg-vector-result
+          name: logo-svg-result
           path: output/logo_vector.svg
