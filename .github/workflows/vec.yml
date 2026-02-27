@@ -1,4 +1,4 @@
-name: Image to SVG Vector Pro
+name: Image to SVG Vector Line Art
 
 on:
   workflow_dispatch: # Klik manual di tab Actions
@@ -7,7 +7,7 @@ jobs:
   convert-process:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Izin buat nge-push file SVG balik ke repo
+      contents: write
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -23,30 +23,30 @@ jobs:
 
       - name: Prepare Workspace and Convert
         run: |
-          # Pastikan folder input ada
           mkdir -p input output
           
-          # Cek apakah file gambar ada, kalau ga ada kita kasih peringatan santai
           if [ ! -f "input/image_b811fb.png" ]; then
-            echo "❌ WADUH! File 'input/image_b811fb.png' nggak ketemu, Bro!"
-            echo "Pastikan lo udah upload gambarnya ke folder 'input' dengan nama yang bener."
+            echo "❌ File 'input/image_b811fb.png' tidak ditemukan!"
             exit 1
           fi
 
-          # Eksekusi Vectorization
+          # Eksekusi Vectorization khusus Black and White
+          # --colormode bw: cuma pake hitam-putih
+          # --hierarchical cutout: bikin background putih jadi transparan (cutout)
           vtracer \
             --input input/image_b811fb.png \
             --output output/logo_vector.svg \
             --mode spline \
+            --colormode bw \
+            --hierarchical cutout \
             --path_precision 3 \
             --corner_threshold 60 \
-            --filter_speckle 4 \
-            --color_precision 8
+            --filter_speckle 4
 
       - name: Auto-Commit SVG Result
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add output/logo_vector.svg
-          git commit -m "Auto-generate SVG vector from image [skip ci]" || echo "No changes to commit"
+          git commit -m "Generate Black Line Art SVG [skip ci]" || echo "No changes to commit"
           git push
