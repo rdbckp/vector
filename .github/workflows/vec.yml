@@ -1,7 +1,7 @@
-name: Corel-Style Trace Anti-Rontok
+name: Corel-Style Trace Release Edition
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Klik manual di tab Actions
 
 jobs:
   trace-process:
@@ -17,43 +17,41 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y imagemagick potrace
 
-      - name: Execute Trace (Corel X5 Logic)
+      - name: Detect and Process Image
         run: |
-          mkdir -p input output
+          # Cari file input dengan berbagai ekstensi (case-insensitive)
+          INPUT_FILE=$(ls input.png input.jpg input.jpeg 2>/dev/null | head -n 1)
           
-          if [ ! -f "input/image_b811fb.png" ]; then
-            echo "❌ File input kaga ada Bro!"
+          if [ -z "$INPUT_FILE" ]; then
+            echo "❌ WADUH! Kagak ada file input.png, input.jpg, atau input.jpeg di root repo, Bro!"
             exit 1
           fi
+          
+          echo "✅ Nemukan file: $INPUT_FILE. Langsung eksekusi..."
 
           # --- TAHAP 1: MASAK BITMAP (ImageMagick) ---
-          # -density 500 & -resample: naikin DPI kayak Macro lo
-          # -threshold 50%: Sesuai 'Threshold:=60' di script lo
-          # -morphology: Nge-smooth garis biar gak rontok pas di-trace
-          convert -density 500 input/image_b811fb.png \
+          convert -density 500 "$INPUT_FILE" \
                   -resample 500 \
                   -colorspace gray \
                   -threshold 50% \
                   -blur 0x0.5 \
                   -morphology Smooth Octagon \
-                  input/temp_cooked.bmp
+                  temp_cooked.bmp
 
           # --- TAHAP 2: EKSEKUSI TRACE (Potrace) ---
-          # -s: Output SVG
-          # --alphamax 1.1: Ini setara 'Smoothing 15' (makin kecil makin kaku, 1.1 itu smooth)
-          # --turdsize 50: Hapus bintik kecil (Anti-Rontok)
-          # --opttolerance 0.2: Jaga detail lekukan asli
-          potrace input/temp_cooked.bmp \
+          potrace temp_cooked.bmp \
                   -s \
                   --alphamax 1.1 \
                   --turdsize 50 \
-                  --opttolerance 0.1 \
-                  -o output/logo_vector.svg
+                  --opttolerance 0.2 \
+                  -o logo_vector.svg
 
-      - name: Auto-Commit Hasil
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add output/logo_vector.svg
-          git commit -m "SVG Trace Anti-Rontok [skip ci]" || echo "No changes"
-          git push
+      - name: Create Release and Upload SVG
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ github.run_number }}"
+          name: "Result Vector #${{ github.run_number }}"
+          body: "Hasil tracing anti-rontok Dino Salto Style selesai broooohh!"
+          files: logo_vector.svg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
