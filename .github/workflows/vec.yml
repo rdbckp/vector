@@ -30,7 +30,7 @@ jobs:
           # -density 500 & -resample: naikin DPI kayak Macro lo
           # -threshold 50%: Sesuai 'Threshold:=60' di script lo
           # -morphology: Nge-smooth garis biar gak rontok pas di-trace
-          convert -density 300 input/image_b811fb.png \
+          convert -density 500 input/image_b811fb.png \
                   -resample 500 \
                   -colorspace gray \
                   -threshold 50% \
@@ -47,7 +47,7 @@ jobs:
                   -s \
                   --alphamax 1.1 \
                   --turdsize 50 \
-                  --opttolerance 0.2 \
+                  --opttolerance 0.1 \
                   -o output/logo_vector.svg
 
       - name: Auto-Commit Hasil
