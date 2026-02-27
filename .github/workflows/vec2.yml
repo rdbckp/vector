@@ -1,0 +1,66 @@
+name: Pro Character Trace (Anti-Debu)
+
+on:
+  workflow_dispatch:
+    inputs:
+      file_name:
+        description: 'Nama File (Misal: goku.png)'
+        default: 'input.png'
+        required: true
+      threshold_percent:
+        description: 'Threshold (30-60) - Makin kecil makin banyak garis halus muncul'
+        default: '35'
+        required: true
+      turdsize:
+        description: 'Anti-Rontok - Perkecil ke angka 2-5 buat detail rambut'
+        default: '3'
+        required: true
+
+jobs:
+  trace-process:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Pro Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick potrace
+
+      - name: Execute Anti-Debu Trace
+        run: |
+          TARGET_FILE="${{ github.event.inputs.file_name }}"
+          
+          if [ ! -f "$TARGET_FILE" ]; then
+            echo "❌ File '$TARGET_FILE' kagak ada di root repo!"
+            exit 1
+          fi
+
+          # --- TAHAP 1: PERTAJAM GARIS (Anti-Debu) ---
+          # Kita naikin kontras ekstrem & hilangkan filter smoothing yang bikin rontok
+          convert "$TARGET_FILE" \
+                  -colorspace gray \
+                  -alpha remove \
+                  -negate -lat 25x25+10% -negate \
+                  -threshold ${{ github.event.inputs.threshold_percent }}% \
+                  temp_cooked.bmp
+
+          # --- TAHAP 2: EKSEKUSI TRACE PRESISI ---
+          # turdsize dikecilkan biar detail mata/rambut gak ilang
+          potrace temp_cooked.bmp \
+                  -s \
+                  --alphamax 1.0 \
+                  --turdsize ${{ github.event.inputs.turdsize }} \
+                  -o logo_vector.svg
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ github.run_number }}-goku"
+          name: "Character Vector #${{ github.run_number }}"
+          files: logo_vector.svg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
