@@ -1,8 +1,12 @@
-name: Corel-Style Trace Custom Tuning
+name: Corel-Style Trace Pro Max
 
 on:
   workflow_dispatch:
     inputs:
+      file_name:
+        description: 'Nama File (Misal: logo.png) - Kosongkan untuk auto-detect input.png'
+        default: ''
+        required: false
       dpi_resample:
         description: 'Resolusi (DPI) - Makin tinggi makin detail'
         default: '500'
@@ -12,11 +16,11 @@ on:
         default: '50'
         required: true
       smoothness:
-        description: 'Smoothness (AlphaMax) - 1.0 (kaku) s/d 1.3 (sangat meliuk)'
+        description: 'Smoothness (AlphaMax) - 1.0 (tegas) s/d 1.3 (meliuk)'
         default: '1.1'
         required: true
       turdsize:
-        description: 'Anti-Rontok (Turdsize) - Hapus bintik kecil (angka 10-100)'
+        description: 'Anti-Rontok (Turdsize) - Hapus bintik (angka 10-100)'
         default: '50'
         required: true
 
@@ -36,19 +40,24 @@ jobs:
 
       - name: Detect and Process Image
         run: |
-          # Cari file input (png/jpg/jpeg)
-          INPUT_FILE=$(ls input.png input.jpg input.jpeg 2>/dev/null | head -n 1)
+          # Logika milih file: Input manual dulu, kalau kosong baru auto-detect
+          USER_INPUT="${{ github.event.inputs.file_name }}"
           
-          if [ -z "$INPUT_FILE" ]; then
-            echo "❌ WADUH! Kagak ada file input.png/jpg/jpeg di root repo!"
+          if [ -n "$USER_INPUT" ]; then
+            TARGET_FILE="$USER_INPUT"
+          else
+            TARGET_FILE=$(ls input.png input.jpg input.jpeg 2>/dev/null | head -n 1)
+          fi
+          
+          if [ ! -f "$TARGET_FILE" ]; then
+            echo "❌ WADUH! File '$TARGET_FILE' kagak nemu di root repo, Bro!"
             exit 1
           fi
           
-          echo "🚀 Processing $INPUT_FILE with Custom Settings..."
+          echo "🚀 Gaspol pake file: $TARGET_FILE"
 
           # --- TAHAP 1: MASAK BITMAP (ImageMagick) ---
-          # Pake input dari UI: ${{ github.event.inputs.xxx }}
-          convert -density ${{ github.event.inputs.dpi_resample }} "$INPUT_FILE" \
+          convert -density ${{ github.event.inputs.dpi_resample }} "$TARGET_FILE" \
                   -resample ${{ github.event.inputs.dpi_resample }} \
                   -colorspace gray \
                   -threshold ${{ github.event.inputs.threshold_percent }}% \
@@ -68,9 +77,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "v${{ github.run_number }}-custom"
-          name: "Vector Result #${{ github.run_number }} (Tuned)"
+          name: "Vector Result #${{ github.run_number }}"
           body: |
             **Tuning Specs:**
+            - File Source: ${{ github.event.inputs.file_name || 'Auto-detected' }}
             - DPI: ${{ github.event.inputs.dpi_resample }}
             - Threshold: ${{ github.event.inputs.threshold_percent }}%
             - Smoothness: ${{ github.event.inputs.smoothness }}
