@@ -1,7 +1,24 @@
-name: Corel-Style Trace Release Edition
+name: Corel-Style Trace Custom Tuning
 
 on:
-  workflow_dispatch: # Klik manual di tab Actions
+  workflow_dispatch:
+    inputs:
+      dpi_resample:
+        description: 'Resolusi (DPI) - Makin tinggi makin detail'
+        default: '500'
+        required: true
+      threshold_percent:
+        description: 'Threshold (%) - Ketebalan garis (40-60)'
+        default: '50'
+        required: true
+      smoothness:
+        description: 'Smoothness (AlphaMax) - 1.0 (kaku) s/d 1.3 (sangat meliuk)'
+        default: '1.1'
+        required: true
+      turdsize:
+        description: 'Anti-Rontok (Turdsize) - Hapus bintik kecil (angka 10-100)'
+        default: '50'
+        required: true
 
 jobs:
   trace-process:
@@ -19,21 +36,22 @@ jobs:
 
       - name: Detect and Process Image
         run: |
-          # Cari file input dengan berbagai ekstensi (case-insensitive)
+          # Cari file input (png/jpg/jpeg)
           INPUT_FILE=$(ls input.png input.jpg input.jpeg 2>/dev/null | head -n 1)
           
           if [ -z "$INPUT_FILE" ]; then
-            echo "❌ WADUH! Kagak ada file input.png, input.jpg, atau input.jpeg di root repo, Bro!"
+            echo "❌ WADUH! Kagak ada file input.png/jpg/jpeg di root repo!"
             exit 1
           fi
           
-          echo "✅ Nemukan file: $INPUT_FILE. Langsung eksekusi..."
+          echo "🚀 Processing $INPUT_FILE with Custom Settings..."
 
           # --- TAHAP 1: MASAK BITMAP (ImageMagick) ---
-          convert -density 500 "$INPUT_FILE" \
-                  -resample 500 \
+          # Pake input dari UI: ${{ github.event.inputs.xxx }}
+          convert -density ${{ github.event.inputs.dpi_resample }} "$INPUT_FILE" \
+                  -resample ${{ github.event.inputs.dpi_resample }} \
                   -colorspace gray \
-                  -threshold 50% \
+                  -threshold ${{ github.event.inputs.threshold_percent }}% \
                   -blur 0x0.5 \
                   -morphology Smooth Octagon \
                   temp_cooked.bmp
@@ -41,17 +59,22 @@ jobs:
           # --- TAHAP 2: EKSEKUSI TRACE (Potrace) ---
           potrace temp_cooked.bmp \
                   -s \
-                  --alphamax 1.1 \
-                  --turdsize 50 \
+                  --alphamax ${{ github.event.inputs.smoothness }} \
+                  --turdsize ${{ github.event.inputs.turdsize }} \
                   --opttolerance 0.2 \
                   -o logo_vector.svg
 
-      - name: Create Release and Upload SVG
+      - name: Create Release and Upload
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v${{ github.run_number }}"
-          name: "Result Vector #${{ github.run_number }}"
-          body: "Hasil tracing anti-rontok Dino Salto Style selesai broooohh!"
+          tag_name: "v${{ github.run_number }}-custom"
+          name: "Vector Result #${{ github.run_number }} (Tuned)"
+          body: |
+            **Tuning Specs:**
+            - DPI: ${{ github.event.inputs.dpi_resample }}
+            - Threshold: ${{ github.event.inputs.threshold_percent }}%
+            - Smoothness: ${{ github.event.inputs.smoothness }}
+            - Anti-Rontok: ${{ github.event.inputs.turdsize }}
           files: logo_vector.svg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
