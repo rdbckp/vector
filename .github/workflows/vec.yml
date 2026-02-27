@@ -1,10 +1,10 @@
-name: Image to SVG Vector Line Art
+name: Corel-Style Trace Anti-Rontok
 
 on:
-  workflow_dispatch: # Klik manual di tab Actions
+  workflow_dispatch:
 
 jobs:
-  convert-process:
+  trace-process:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -12,41 +12,48 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Cache Cargo Registry
-        uses: actions/cache@v3
-        with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-vtracer
+      - name: Install Pro Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick potrace
 
-      - name: Install Vtracer Tool
-        run: cargo install vtracer
-
-      - name: Prepare Workspace and Convert
+      - name: Execute Trace (Corel X5 Logic)
         run: |
           mkdir -p input output
           
           if [ ! -f "input/image_b811fb.png" ]; then
-            echo "❌ File 'input/image_b811fb.png' tidak ditemukan!"
+            echo "❌ File input kaga ada Bro!"
             exit 1
           fi
 
-          # Eksekusi Vectorization khusus Black and White
-          # --colormode bw: cuma pake hitam-putih
-          # --hierarchical cutout: bikin background putih jadi transparan (cutout)
-          vtracer \
-            --input input/image_b811fb.png \
-            --output output/logo_vector.svg \
-            --mode spline \
-            --colormode bw \
-            --hierarchical cutout \
-            --path_precision 3 \
-            --corner_threshold 60 \
-            --filter_speckle 4
+          # --- TAHAP 1: MASAK BITMAP (ImageMagick) ---
+          # -density 300 & -resample: naikin DPI kayak Macro lo
+          # -threshold 60%: Sesuai 'Threshold:=60' di script lo
+          # -morphology: Nge-smooth garis biar gak rontok pas di-trace
+          convert -density 300 input/image_b811fb.png \
+                  -resample 300 \
+                  -colorspace gray \
+                  -threshold 60% \
+                  -blur 0x0.5 \
+                  -morphology Smooth Octagon \
+                  input/temp_cooked.bmp
 
-      - name: Auto-Commit SVG Result
+          # --- TAHAP 2: EKSEKUSI TRACE (Potrace) ---
+          # -s: Output SVG
+          # --alphamax 1.1: Ini setara 'Smoothing 15' (makin kecil makin kaku, 1.1 itu smooth)
+          # --turdsize 50: Hapus bintik kecil (Anti-Rontok)
+          # --opttolerance 0.2: Jaga detail lekukan asli
+          potrace input/temp_cooked.bmp \
+                  -s \
+                  --alphamax 1.1 \
+                  --turdsize 50 \
+                  --opttolerance 0.2 \
+                  -o output/logo_vector.svg
+
+      - name: Auto-Commit Hasil
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add output/logo_vector.svg
-          git commit -m "Generate Black Line Art SVG [skip ci]" || echo "No changes to commit"
+          git commit -m "SVG Trace Anti-Rontok [skip ci]" || echo "No changes"
           git push
