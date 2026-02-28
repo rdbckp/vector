@@ -1,0 +1,61 @@
+name: Face Vevtorize
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_url:
+        description: 'Link URL Foto (PNG/JPG)'
+        required: true
+      threshold_val:
+        description: 'Level Kegelapan (40-60%) - Makin kecil makin terang'
+        default: '50'
+        required: true
+      clean_level:
+        description: 'Clean Level (0-5) - Makin tinggi makin bersih dari bintik'
+        default: '2'
+        required: true
+
+jobs:
+  stencil-process:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Pro Tools
+        run: sudo apt-get update && sudo apt-get install -y imagemagick potrace
+
+      - name: Image to Pop-Art Stencil
+        run: |
+          # 1. Download
+          curl -L "${{ github.event.inputs.image_url }}" -o "face_raw"
+
+          # 2. Masak Gambar (Pop-Art Logic)
+          # -colorspace gray: Buang warna
+          # -contrast-stretch: Biar item putihnya kontras banget
+          # -despeckle & -morphology: Buang 'sampah' di kulit biar mulus
+          convert face_raw \
+                  -colorspace gray \
+                  -contrast-stretch 2%x2% \
+                  -threshold ${{ github.event.inputs.threshold_val }}% \
+                  -despeckle -despeckle \
+                  -morphology Open Disk:${{ github.event.inputs.clean_level }} \
+                  stencil_cooked.bmp
+
+          # 3. Tracing Presisi
+          potrace stencil_cooked.bmp \
+                  -s \
+                  --alphamax 1.2 \
+                  --turdsize 100 \
+                  -o stencil_pop_art.svg
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "stencil-v${{ github.run_number }}"
+          name: "Pop-Art Result #${{ github.run_number }}"
+          files: stencil_pop_art.svg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
