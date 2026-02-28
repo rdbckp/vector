@@ -1,70 +1,29 @@
-name: High-Fidelity BW Vectorizer
-
-on:
-  workflow_dispatch:
-    inputs:
-      image_url:
-        description: 'Paste Link URL Fotonya di sini'
-        required: true
-      shadow_boost:
-        description: 'Ketegasan bayangan (15-35). Makin tinggi makin hitam pekat.'
-        default: '25'
-        required: true
-      levels:
-        description: 'Jumlah layer abu-abu (Gunakan 6 atau 8 biar halus)'
-        default: '8'
-        required: true
-
-jobs:
-  vectorize-process:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Install Tools
+- name: Process Image to Pro Vector
         run: |
-          sudo apt-get update && sudo apt-get install -y imagemagick
-          # Install vtracer engine
-          wget https://github.com/visioncortex/vtracer/releases/latest/download/vtracer-x86_64-unknown-linux-musl.tar.gz
-          tar -xvf vtracer-x86_64-unknown-linux-musl.tar.gz
-          chmod +x vtracer
-          sudo mv vtracer /usr/local/bin/
-
-      - name: Process Image to Vector
-        run: |
-          # 1. Download foto
           curl -L "${{ github.event.inputs.image_url }}" -o "input_image"
 
-          # 2. Tahap Pre-Processing (Masak Gambar)
-          # -level: Buat negesin bagian shadow biar hitamnya nonjok
-          # -sharp: Biar detail tato gak kabur
-          # -posterize: Bikin layer gradasi halus kayak hasil tadi
+          # TAHAP PRE-PROCESSING DEWA
+          # 1. -adaptive-sharpen: Negesin garis tato & bass tanpa nambah noise
+          # 2. -adaptive-blur: Mulusin area kulit biar gak pecah pas di-trace
+          # 3. -contrast-stretch: Mastiin area item beneran "deep black"
           convert input_image \
                   -colorspace gray \
+                  -adaptive-sharpen 0x2 \
+                  -adaptive-blur 0x1 \
+                  -contrast-stretch 2%x2% \
                   -level ${{ github.event.inputs.shadow_boost }}%,100% \
-                  -sharpen 0x1.5 \
                   -posterize ${{ github.event.inputs.levels }} \
                   cooked.png
 
-          # 3. Tahap Tracing (Konversi ke SVG)
-          # Mode 'spline' bikin garisnya melengkung halus, gak kotak-kotak
+          # TAHAP TRACING (vtracer)
+          # --mode spline: WAJIB, ini yang bikin garis melengkung cakep
+          # --path_precision 2: Biar detail kecil kayak tato tetep dapet
           vtracer --input cooked.png \
                   --output result.svg \
                   --mode spline \
                   --colormode color \
                   --hierarchical cutout \
-                  --filter_speckle 4 \
+                  --filter_speckle 10 \
                   --color_precision 8 \
-                  --path_precision 3
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: "vector-v${{ github.run_number }}"
-          name: "High-Fidelity Vector Result #${{ github.run_number }}"
-          files: result.svg
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  --path_precision 2 \
+                  --corner_threshold 60
