@@ -1,5 +1,4 @@
-name: Ultra Pop-Art Stencil (Multi-Layer)
-
+name: Face Vectorize
 on:
   workflow_dispatch:
     inputs:
@@ -24,27 +23,31 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install Pro Tools
-        run: sudo apt-get update && sudo apt-get install -y imagemagick vtracer
+      - name: Install ImageMagick
+        run: sudo apt-get update && sudo apt-get install -y imagemagick
+
+      - name: Install vtracer (Fast Binary Mode)
+        run: |
+          # Download vtracer langsung versi Linux binary biar gak Error
+          wget https://github.com/visioncortex/vtracer/releases/latest/download/vtracer-linux -O vtracer
+          chmod +x vtracer
+          sudo mv vtracer /usr/local/bin/
 
       - name: Image to High-Fidelity Pop-Art
         run: |
-          # 1. Download
+          # 1. Download source
           curl -L "${{ github.event.inputs.image_url }}" -o "source_raw"
 
           # 2. Masak Gambar (Posterize Logic)
-          # -modulate: Naikin kontras dikit
-          # -posterize: Ini kuncinya! Bikin layer warna jadi terbatas (kayak contoh kanan)
-          # -median: Buat nge-smooth blok warna biar gak bergerigi
+          # Biar mirip contoh kanan, kita mainin kontras dan pembagian layer warna
           convert source_raw \
                   -colorspace gray \
-                  -modulate 110,120 \
+                  -modulate 110,130 \
                   -median ${{ github.event.inputs.clean_level }} \
                   -posterize ${{ github.event.inputs.posterize_levels }} \
                   cooked_poster.png
 
           # 3. Tracing Pake vtracer (Bukan Potrace)
-          # vtracer jauh lebih jago buat gambar yang punya banyak layer warna/abu-abu
           vtracer --input cooked_poster.png \
                   --output result_popart.svg \
                   --mode spline \
