@@ -1,26 +1,22 @@
-name: Ultra Pop-Art Stencil (Deep Shadow Edition)
+name: High-Fidelity BW Vectorizer
 
 on:
   workflow_dispatch:
     inputs:
       image_url:
-        description: 'Link URL Foto (PNG/JPG)'
+        description: 'Paste Link URL Fotonya di sini'
+        required: true
+      shadow_boost:
+        description: 'Ketegasan bayangan (15-35). Makin tinggi makin hitam pekat.'
+        default: '25'
         required: true
       levels:
-        description: 'Jumlah Warna (Rekomendasi: 6-8)'
+        description: 'Jumlah layer abu-abu (Gunakan 6 atau 8 biar halus)'
         default: '8'
-        required: true
-      shadow_darkness:
-        description: 'Shadow Tone (10-30) - Makin besar makin hitam pekat bayangannya'
-        default: '20'
-        required: true
-      contrast_boost:
-        description: 'Contrast (1.0 - 1.5)'
-        default: '1.2'
         required: true
 
 jobs:
-  stencil-process:
+  vectorize-process:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -28,33 +24,35 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install Pro Tools
-        run: sudo apt-get update && sudo apt-get install -y imagemagick
-
-      - name: Install vtracer
+      - name: Install Tools
         run: |
+          sudo apt-get update && sudo apt-get install -y imagemagick
+          # Install vtracer engine
           wget https://github.com/visioncortex/vtracer/releases/latest/download/vtracer-x86_64-unknown-linux-musl.tar.gz
           tar -xvf vtracer-x86_64-unknown-linux-musl.tar.gz
           chmod +x vtracer
           sudo mv vtracer /usr/local/bin/
 
-      - name: Image to Deep Shadow Pop-Art
+      - name: Process Image to Vector
         run: |
-          curl -L "${{ github.event.inputs.image_url }}" -o "source_raw"
+          # 1. Download foto
+          curl -L "${{ github.event.inputs.image_url }}" -o "input_image"
 
-          # --- JURUS ANTI-LEMES (Shadow & Contrast) ---
-          # -level {shadow}%: Paksa warna gelap jadi hitam murni
-          # -sigmoidal-contrast: Bikin transisi shadow ke highlight jadi tegas (pop-art style)
-          convert source_raw \
+          # 2. Tahap Pre-Processing (Masak Gambar)
+          # -level: Buat negesin bagian shadow biar hitamnya nonjok
+          # -sharp: Biar detail tato gak kabur
+          # -posterize: Bikin layer gradasi halus kayak hasil tadi
+          convert input_image \
                   -colorspace gray \
-                  -level ${{ github.event.inputs.shadow_darkness }}%,100% \
-                  -sigmoidal-contrast ${{ github.event.inputs.contrast_boost }}x50% \
-                  -gaussian-blur 0x0.5 \
+                  -level ${{ github.event.inputs.shadow_boost }}%,100% \
+                  -sharpen 0x1.5 \
                   -posterize ${{ github.event.inputs.levels }} \
-                  cooked_poster.png
+                  cooked.png
 
-          vtracer --input cooked_poster.png \
-                  --output result_popart.svg \
+          # 3. Tahap Tracing (Konversi ke SVG)
+          # Mode 'spline' bikin garisnya melengkung halus, gak kotak-kotak
+          vtracer --input cooked.png \
+                  --output result.svg \
                   --mode spline \
                   --colormode color \
                   --hierarchical cutout \
@@ -65,8 +63,8 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "popart-v${{ github.run_number }}"
-          name: "Deep Shadow Result #${{ github.run_number }}"
-          files: result_popart.svg
+          tag_name: "vector-v${{ github.run_number }}"
+          name: "High-Fidelity Vector Result #${{ github.run_number }}"
+          files: result.svg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
