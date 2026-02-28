@@ -1,0 +1,35 @@
+name: Cleanup Image Files
+
+on:
+  workflow_dispatch: # Biar bisa di-run manual lewat tab Actions
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Wajib biar bisa nge-push perubahan (hapus file)
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Delete All Images
+        run: |
+          echo "🧹 Sedang membersihkan file gambar..."
+          # Mencari dan menghapus file dengan ekstensi umum
+          # -f biar gak error kalau filenya emang gak ada
+          rm -f *.png *.jpg *.jpeg *.bmp *.svg *.webp
+          echo "✅ Pembersihan selesai."
+
+      - name: Commit and Push Changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Cek ada perubahan apa gak, baru commit
+          if [ -n "$(git status --porcelain)" ]; then
+            git add .
+            git commit -m "chore: cleanup input images [skip ci]"
+            git push
+          else
+            echo "🤷 Gak ada file yang perlu dihapus, Bro."
+          fi
