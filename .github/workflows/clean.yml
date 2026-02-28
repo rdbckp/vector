@@ -1,14 +1,14 @@
-name: Super Cleanup (Files + Logs)
+name: Cleanup
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Jalankan manual dari tab Actions
 
 jobs:
-  cleanup-everything:
+  total-cleanup:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      actions: write
+      contents: write # Wajib buat hapus file & release
+      actions: write  # Wajib buat hapus log run
     
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -17,10 +17,10 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # --- BAGIAN 1: HAPUS FILE GAMBAR ---
+      # --- BAGIAN 1: HAPUS FILE GAMBAR DI REPO ---
       - name: Delete Image Files
         run: |
-          echo "🧹 Menghapus file gambar..."
+          echo "🧹 Menghapus file gambar (png, jpg, svg, dll)..."
           rm -f *.png *.jpg *.jpeg *.bmp *.svg *.webp
           
           git config --local user.name "github-actions[bot]"
@@ -34,20 +34,23 @@ jobs:
             echo "🤷 Gak ada file gambar yang perlu diapus."
           fi
 
-      # --- BAGIAN 2: BABAT LOG HISTORY (ANTI-SELF-DESTRUCT) ---
+      # --- BAGIAN 2: HAPUS SEMUA RELEASES & TAGS ---
+      - name: Delete All Releases and Tags
+        run: |
+          echo "📦 Memulai pembersihan Releases..."
+          # Ambil semua tag release, lalu hapus satu-satu pake GitHub CLI
+          # --cleanup-tag bakal hapus release SEKALIGUS tag git-nya
+          gh release list --limit 1000 --json tagName -q '.[].tagName' | xargs -I{} gh release delete {} --yes --cleanup-tag || echo "Releases sudah kosong."
+
+      # --- BAGIAN 3: BABAT LOG HISTORY (ANTI-SELF-DESTRUCT) ---
       - name: Purge Old Workflow Runs
         run: |
           echo "🔥 Memulai pembantaian log history..."
-          
-          # Ambil ID run yang sekarang lagi jalan biar GAK kehapus
           CURRENT_RUN_ID="${{ github.run_id }}"
-          echo "Current Run ID: $CURRENT_RUN_ID (Skipping this one)"
           
-          # 1. Ambil list semua ID
-          # 2. Buang ID yang sekarang (grep -v)
-          # 3. Hapus sisanya
+          # Ambil list ID, buang ID yang sekarang, lalu delete
           gh run list --limit 1000 --json databaseId -q '.[].databaseId' \
           | grep -v "$CURRENT_RUN_ID" \
-          | xargs -I{} gh run delete {} || echo "Beberapa run mungkin gagal dihapus, tapi aman Brooohh!"
+          | xargs -I{} gh run delete {} || echo "Beberapa log mungkin sudah bersih."
           
-          echo "✨ Pembersihan selesai! Sisanya cuma run ini doang."
+          echo "✨ SEMUA BERSIH KINCLONG, BROOOOHH!"
