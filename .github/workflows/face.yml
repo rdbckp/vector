@@ -1,4 +1,4 @@
-name: Ultra Pop-Art Stencil (Fixed Architecture)
+name: Ultra Pop-Art Stencil (Super Detail)
 
 on:
   workflow_dispatch:
@@ -6,13 +6,13 @@ on:
       image_url:
         description: 'Link URL Foto (PNG/JPG)'
         required: true
-      posterize_levels:
-        description: 'Jumlah Warna (Default 4: Hitam, Abu Tua, Abu Muda, Putih)'
-        default: '4'
+      levels:
+        description: 'Jumlah Warna (Rekomendasi: 8 untuk detail halus)'
+        default: '8'
         required: true
-      clean_level:
-        description: 'Smoothness (1-3) - Biar gak banyak bintik'
-        default: '1'
+      smoothness:
+        description: 'Smoothness (0-3) - 0 untuk paling tajam'
+        default: '0'
         required: true
 
 jobs:
@@ -27,45 +27,46 @@ jobs:
       - name: Install Pro Tools
         run: sudo apt-get update && sudo apt-get install -y imagemagick
 
-      - name: Install vtracer (Fixed Extraction)
+      - name: Install vtracer (Fixed Architecture)
         run: |
-          # 1. Download versi Linux x86_64
           wget https://github.com/visioncortex/vtracer/releases/latest/download/vtracer-x86_64-unknown-linux-musl.tar.gz
-          
-          # 2. Ekstrak filenya
           tar -xvf vtracer-x86_64-unknown-linux-musl.tar.gz
-          
-          # 3. Pindahin ke folder bin biar bisa dipanggil langsung
           chmod +x vtracer
           sudo mv vtracer /usr/local/bin/
 
       - name: Image to High-Fidelity Pop-Art
         run: |
-          # Download source
+          # 1. Download source
           curl -L "${{ github.event.inputs.image_url }}" -o "source_raw"
 
-          # Masak Gambar (Posterize Logic)
+          # 2. Masak Gambar (Logic Anti-Pecah)
+          # -modulate: Naikin saturasi & terang dikit
+          # -contrast-stretch: Mastiin item beneran item, putih beneran putih
+          # -gaussian-blur: Ngilangin noise bintik kecil biar gak pecah pas di-trace
           convert source_raw \
                   -colorspace gray \
-                  -modulate 110,130 \
-                  -median ${{ github.event.inputs.clean_level }} \
-                  -posterize ${{ github.event.inputs.posterize_levels }} \
+                  -modulate 110,100 \
+                  -contrast-stretch 1%x1% \
+                  -gaussian-blur 0x0.5 \
+                  -posterize ${{ github.event.inputs.levels }} \
                   cooked_poster.png
 
-          # Tracing Pake vtracer
+          # 3. Tracing Pake vtracer (Settingan Halus)
           vtracer --input cooked_poster.png \
                   --output result_popart.svg \
                   --mode spline \
                   --colormode color \
                   --hierarchical cutout \
-                  --filter_speckle 4 \
-                  --path_precision 3
+                  --filter_speckle 2 \
+                  --color_precision 8 \
+                  --path_precision 3 \
+                  --corner_threshold 60
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "popart-v${{ github.run_number }}"
-          name: "High-Fidelity Pop-Art #${{ github.run_number }}"
+          name: "Super Detail Result #${{ github.run_number }}"
           files: result_popart.svg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
