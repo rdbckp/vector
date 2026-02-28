@@ -1,14 +1,14 @@
-name: Clean
+name: Super Cleanup (Files + Logs)
 
 on:
-  workflow_dispatch: # Run manual kapan aja lo mau
+  workflow_dispatch: # Klik manual di tab Actions
 
 jobs:
   cleanup-everything:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      actions: write # WAJIB ada ini biar bisa hapus log run
+      actions: write # Wajib buat hapus log
     
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -34,19 +34,13 @@ jobs:
             echo "🤷 Gak ada file gambar yang perlu diapus."
           fi
 
-      # --- BAGIAN 2: BABAT HABIS LOG RUN ACTIONS ---
+      # --- BAGIAN 2: BABAT HABIS LOG RUN ACTIONS (FIXED) ---
       - name: Purge All Workflow Runs
         run: |
           echo "🔥 Memulai pembantaian log history..."
           
-          # Ambil semua ID workflow yang ada di repo ini
-          # Lalu hapus semua run (history) dari masing-masing workflow
-          workflows=$(gh workflow list --json id -q '.[].id')
+          # Ambil semua ID run dari semua workflow, lalu hapus satu-satu
+          # --limit 1000 biar history yang lama-lama banget keangkut semua
+          gh run list --limit 1000 --json databaseId -q '.[].databaseId' | xargs -I{} gh run delete {}
           
-          for workflow_id in $workflows; do
-            echo "Cleaning workflow: $workflow_id"
-            # Hapus semua run yang statusnya 'completed'
-            gh run delete --workflow $workflow_id --all
-          done
-          
-          echo "✨ Tab Actions sekarang bersih kayak baru beli!"
+          echo "✨ Tab Actions sekarang bersih kinclong!"
