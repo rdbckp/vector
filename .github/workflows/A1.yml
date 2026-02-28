@@ -1,0 +1,70 @@
+name: Gen Vectorizer
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_url:
+        description: 'Link URL Foto'
+        required: true
+      anatomy_detail:
+        description: 'Detail Otot/Tato (1-5). Makin tinggi makin tajam.'
+        default: '3'
+        required: true
+      artistic_flow:
+        description: 'Kelenturan Garis (0.5 - 1.5). Default 1.0 (Nano-Style)'
+        default: '1.0'
+        required: true
+
+jobs:
+  ai-style-trace:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Graphic Engines
+        run: |
+          sudo apt-get update && sudo apt-get install -y imagemagick
+          wget https://github.com/visioncortex/vtracer/releases/latest/download/vtracer-x86_64-unknown-linux-musl.tar.gz
+          tar -xvf vtracer-x86_64-unknown-linux-musl.tar.gz
+          chmod +x vtracer
+          sudo mv vtracer /usr/local/bin/
+
+      - name: Generative-Style Cooking
+        run: |
+          curl -L "${{ github.event.inputs.image_url }}" -o "raw_input"
+
+          # LOGIKA PSEUDO-AI:
+          # 1. -bilateral-blur: Mulusin kulit TANPA ngerusak garis otot (mirip AI Denoise)
+          # 2. -unsharp: Negesin tato & urat saraf
+          # 3. -evaluate pow: Teknik manipulasi gamma buat "nggambar" bayangan lebih dalem
+          convert raw_input \
+                  -colorspace gray \
+                  -bilateral-blur 0x3+10% \
+                  -unsharp 0x${{ github.event.inputs.anatomy_detail }}+1.0 \
+                  -evaluate pow 1.5 \
+                  -contrast-stretch 1%x1% \
+                  -posterize 8 \
+                  cooked_ai.png
+
+          # TRACING DENGAN SPLINE CURVE EKSTREM
+          vtracer --input cooked_ai.png \
+                  --output result_ai.svg \
+                  --mode spline \
+                  --colormode color \
+                  --hierarchical cutout \
+                  --filter_speckle 5 \
+                  --color_precision 8 \
+                  --path_precision ${{ github.event.inputs.artistic_flow }} \
+                  --corner_threshold 80
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "ai-v${{ github.run_number }}"
+          name: "Pseudo-AI Result #${{ github.run_number }}"
+          files: result_ai.svg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
