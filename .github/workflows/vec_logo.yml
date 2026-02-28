@@ -1,4 +1,4 @@
-name: Logo Vectorize Pro (URL & Local)
+name: Logo Vectorize
 
 on:
   workflow_dispatch:
