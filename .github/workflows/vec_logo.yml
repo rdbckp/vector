@@ -1,9 +1,13 @@
-name: Logo Vectorize
+name: Logo Vectorize Pro (URL & Local)
+
 on:
   workflow_dispatch:
     inputs:
+      image_url:
+        description: 'Tempel Link URL Gambar (Kosongkan jika ingin pakai file di repo)'
+        required: false
       file_name:
-        description: 'Nama File (Misal: logo.png) - Kosongkan untuk auto-detect input.png'
+        description: 'Nama File di Repo (Jika URL kosong. Contoh: input.png)'
         default: ''
         required: false
       dpi_resample:
@@ -37,19 +41,24 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y imagemagick potrace
 
-      - name: Detect and Process Image
+      - name: Detect and Fetch Image
         run: |
-          # Logika milih file: Input manual dulu, kalau kosong baru auto-detect
-          USER_INPUT="${{ github.event.inputs.file_name }}"
+          # Logika milih file: URL > Manual Input > Auto-detect lokal
+          URL_INPUT="${{ github.event.inputs.image_url }}"
+          USER_FILE="${{ github.event.inputs.file_name }}"
           
-          if [ -n "$USER_INPUT" ]; then
-            TARGET_FILE="$USER_INPUT"
+          if [ -n "$URL_INPUT" ]; then
+            echo "🌐 Download gambar dari URL..."
+            curl -L "$URL_INPUT" -o "target_image"
+            TARGET_FILE="target_image"
+          elif [ -n "$USER_FILE" ]; then
+            TARGET_FILE="$USER_FILE"
           else
             TARGET_FILE=$(ls input.png input.jpg input.jpeg 2>/dev/null | head -n 1)
           fi
           
           if [ ! -f "$TARGET_FILE" ]; then
-            echo "❌ WADUH! File '$TARGET_FILE' kagak nemu di root repo, Bro!"
+            echo "❌ WADUH! File kaga nemu, Bro! Cek URL atau nama file di repo."
             exit 1
           fi
           
@@ -75,11 +84,11 @@ jobs:
       - name: Create Release and Upload
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v${{ github.run_number }}-custom"
-          name: "Vector Result #${{ github.run_number }}"
+          tag_name: "v${{ github.run_number }}-vector"
+          name: "Logo Vector Result #${{ github.run_number }}"
           body: |
-            **Tuning Specs:**
-            - File Source: ${{ github.event.inputs.file_name || 'Auto-detected' }}
+            **Vector Specs:**
+            - Source: ${{ github.event.inputs.image_url || github.event.inputs.file_name || 'Auto-detected' }}
             - DPI: ${{ github.event.inputs.dpi_resample }}
             - Threshold: ${{ github.event.inputs.threshold_percent }}%
             - Smoothness: ${{ github.event.inputs.smoothness }}
