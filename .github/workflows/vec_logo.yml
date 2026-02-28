@@ -1,5 +1,4 @@
-name: Corel-Style Trace Pro Max
-
+name: Logo Vectorize
 on:
   workflow_dispatch:
     inputs:
