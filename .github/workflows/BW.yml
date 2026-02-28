@@ -1,4 +1,4 @@
-name: Corel-Style BW Line Art (URL Input)
+name: BW Vectorize
 
 on:
   workflow_dispatch:
