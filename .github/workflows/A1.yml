@@ -36,15 +36,15 @@ jobs:
         run: |
           curl -L "${{ github.event.inputs.image_url }}" -o "raw_input"
 
-          # LOGIKA PSEUDO-AI:
-          # 1. -bilateral-blur: Mulusin kulit TANPA ngerusak garis otot (mirip AI Denoise)
-          # 2. -unsharp: Negesin tato & urat saraf
-          # 3. -evaluate pow: Teknik manipulasi gamma buat "nggambar" bayangan lebih dalem
+          # LOGIKA PSEUDO-AI (KOMPATIBEL IM6):
+          # 1. -selective-blur: Pengganti bilateral, mulusin kulit tapi garis tetep aman.
+          # 2. -unsharp: Negesin tato & otot.
+          # 3. -contrast: Bikin dimensi bayangan lebih dalem.
           convert raw_input \
                   -colorspace gray \
-                  -bilateral-blur 0x3+10% \
+                  -selective-blur 0x3+10% \
                   -unsharp 0x${{ github.event.inputs.anatomy_detail }}+1.0 \
-                  -evaluate pow 1.5 \
+                  -contrast -contrast \
                   -contrast-stretch 1%x1% \
                   -posterize 8 \
                   cooked_ai.png
