@@ -1,35 +1,52 @@
-name: Cleanup Image Files
+name: Clean
 
 on:
-  workflow_dispatch: # Biar bisa di-run manual lewat tab Actions
+  workflow_dispatch: # Run manual kapan aja lo mau
 
 jobs:
-  cleanup:
+  cleanup-everything:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Wajib biar bisa nge-push perubahan (hapus file)
+      contents: write
+      actions: write # WAJIB ada ini biar bisa hapus log run
+    
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Delete All Images
+      # --- BAGIAN 1: HAPUS FILE GAMBAR DI REPO ---
+      - name: Delete Image Files
         run: |
-          echo "🧹 Sedang membersihkan file gambar..."
-          # Mencari dan menghapus file dengan ekstensi umum
-          # -f biar gak error kalau filenya emang gak ada
+          echo "🧹 Menghapus file gambar (png, jpg, svg, dll)..."
           rm -f *.png *.jpg *.jpeg *.bmp *.svg *.webp
-          echo "✅ Pembersihan selesai."
-
-      - name: Commit and Push Changes
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          # Cek ada perubahan apa gak, baru commit
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          
           if [ -n "$(git status --porcelain)" ]; then
             git add .
-            git commit -m "chore: cleanup input images [skip ci]"
+            git commit -m "chore: cleanup images [skip ci]"
             git push
           else
-            echo "🤷 Gak ada file yang perlu dihapus, Bro."
+            echo "🤷 Gak ada file gambar yang perlu diapus."
           fi
+
+      # --- BAGIAN 2: BABAT HABIS LOG RUN ACTIONS ---
+      - name: Purge All Workflow Runs
+        run: |
+          echo "🔥 Memulai pembantaian log history..."
+          
+          # Ambil semua ID workflow yang ada di repo ini
+          # Lalu hapus semua run (history) dari masing-masing workflow
+          workflows=$(gh workflow list --json id -q '.[].id')
+          
+          for workflow_id in $workflows; do
+            echo "Cleaning workflow: $workflow_id"
+            # Hapus semua run yang statusnya 'completed'
+            gh run delete --workflow $workflow_id --all
+          done
+          
+          echo "✨ Tab Actions sekarang bersih kayak baru beli!"
