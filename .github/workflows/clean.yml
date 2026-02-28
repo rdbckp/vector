@@ -1,14 +1,14 @@
 name: Super Cleanup (Files + Logs)
 
 on:
-  workflow_dispatch: # Klik manual di tab Actions
+  workflow_dispatch:
 
 jobs:
   cleanup-everything:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      actions: write # Wajib buat hapus log
+      actions: write
     
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -17,10 +17,10 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # --- BAGIAN 1: HAPUS FILE GAMBAR DI REPO ---
+      # --- BAGIAN 1: HAPUS FILE GAMBAR ---
       - name: Delete Image Files
         run: |
-          echo "🧹 Menghapus file gambar (png, jpg, svg, dll)..."
+          echo "🧹 Menghapus file gambar..."
           rm -f *.png *.jpg *.jpeg *.bmp *.svg *.webp
           
           git config --local user.name "github-actions[bot]"
@@ -34,13 +34,20 @@ jobs:
             echo "🤷 Gak ada file gambar yang perlu diapus."
           fi
 
-      # --- BAGIAN 2: BABAT HABIS LOG RUN ACTIONS (FIXED) ---
-      - name: Purge All Workflow Runs
+      # --- BAGIAN 2: BABAT LOG HISTORY (ANTI-SELF-DESTRUCT) ---
+      - name: Purge Old Workflow Runs
         run: |
           echo "🔥 Memulai pembantaian log history..."
           
-          # Ambil semua ID run dari semua workflow, lalu hapus satu-satu
-          # --limit 1000 biar history yang lama-lama banget keangkut semua
-          gh run list --limit 1000 --json databaseId -q '.[].databaseId' | xargs -I{} gh run delete {}
+          # Ambil ID run yang sekarang lagi jalan biar GAK kehapus
+          CURRENT_RUN_ID="${{ github.run_id }}"
+          echo "Current Run ID: $CURRENT_RUN_ID (Skipping this one)"
           
-          echo "✨ Tab Actions sekarang bersih kinclong!"
+          # 1. Ambil list semua ID
+          # 2. Buang ID yang sekarang (grep -v)
+          # 3. Hapus sisanya
+          gh run list --limit 1000 --json databaseId -q '.[].databaseId' \
+          | grep -v "$CURRENT_RUN_ID" \
+          | xargs -I{} gh run delete {} || echo "Beberapa run mungkin gagal dihapus, tapi aman Brooohh!"
+          
+          echo "✨ Pembersihan selesai! Sisanya cuma run ini doang."
