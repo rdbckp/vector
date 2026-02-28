@@ -1,12 +1,15 @@
-name: Pro Character Trace (Anti-Debu)
+name: Pro Character Trace (Anti-Debu) - URL Edition
 
 on:
   workflow_dispatch:
     inputs:
+      image_url:
+        description: 'Tempel Link URL Gambar (Kosongkan jika ingin pakai file di repo)'
+        required: false
       file_name:
-        description: 'Nama File (Misal: goku.png)'
+        description: 'Nama File di Repo (Jika URL kosong. Default: input.png)'
         default: 'input.png'
-        required: true
+        required: false
       threshold_percent:
         description: 'Threshold (30-60) - Makin kecil makin banyak garis halus muncul'
         default: '35'
@@ -30,17 +33,27 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y imagemagick potrace
 
-      - name: Execute Anti-Debu Trace
+      - name: Fetch and Prepare Image
         run: |
-          TARGET_FILE="${{ github.event.inputs.file_name }}"
+          # Logika: Cek URL dulu, kalau gak ada baru cek file lokal
+          URL_INPUT="${{ github.event.inputs.image_url }}"
+          FILE_INPUT="${{ github.event.inputs.file_name }}"
           
-          if [ ! -f "$TARGET_FILE" ]; then
-            echo "❌ File '$TARGET_FILE' kagak ada di root repo!"
-            exit 1
+          if [ -z "$URL_INPUT" ]; then
+            if [ ! -f "$FILE_INPUT" ]; then
+              echo "❌ WADUH! URL kosong dan file '$FILE_INPUT' kaga nemu di repo, Bro!"
+              exit 1
+            fi
+            TARGET_FILE="$FILE_INPUT"
+            echo "📂 Pake file dari repo: $TARGET_FILE"
+          else
+            echo "🌐 Download gambar dari URL..."
+            curl -L "$URL_INPUT" -o "downloaded_source"
+            TARGET_FILE="downloaded_source"
           fi
 
           # --- TAHAP 1: PERTAJAM GARIS (Anti-Debu) ---
-          # Kita naikin kontras ekstrem & hilangkan filter smoothing yang bikin rontok
+          # Pake Adaptive Thresholding (-lat) biar garis rambut halus kejaga
           convert "$TARGET_FILE" \
                   -colorspace gray \
                   -alpha remove \
@@ -49,7 +62,6 @@ jobs:
                   temp_cooked.bmp
 
           # --- TAHAP 2: EKSEKUSI TRACE PRESISI ---
-          # turdsize dikecilkan biar detail mata/rambut gak ilang
           potrace temp_cooked.bmp \
                   -s \
                   --alphamax 1.0 \
@@ -59,8 +71,13 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v${{ github.run_number }}-goku"
-          name: "Character Vector #${{ github.run_number }}"
+          tag_name: "v${{ github.run_number }}-trace"
+          name: "Character Vector Result #${{ github.run_number }}"
+          body: |
+            **Trace Specs:**
+            - Source: ${{ github.event.inputs.image_url || github.event.inputs.file_name }}
+            - Threshold: ${{ github.event.inputs.threshold_percent }}%
+            - Turdsize: ${{ github.event.inputs.turdsize }}
           files: logo_vector.svg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
