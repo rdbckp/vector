@@ -28,12 +28,11 @@ jobs:
           potrace input_processed.bmp -s -o output_vector.svg
           
           # 3. (Opsional) Balikin ke PNG hitam putih biar bersih
-          convert -density 300 output_vector.svg output_final.png
+          convert -density 1200 hasil.png
 
       - name: Upload Result
         uses: actions/upload-artifact@v4
         with:
           name: vector-result
           path: |
-            output_vector.svg
-            output_final.png
+            hasil.png
