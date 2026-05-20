@@ -1,10 +1,7 @@
-name: Nano-Banana B&W Vector Style Converter
+name: Manual - Nano-Banana B&W Converter
 
 on:
-  push:
-    paths:
-      - 'images/**' # Otomatis trigger kalau folder images di-update
-  workflow_dispatch: # Ada tombol 'Run workflow' kalau mau jalanin manual
+  workflow_dispatch: # Ini kuncinya, murni manual run lewat tombol di GitHub
 
 jobs:
   nano-banana-process:
@@ -25,7 +22,7 @@ jobs:
 
       - name: Run Nano-Banana AI Script
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }} # Ngambil rahasia dari setting repo
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python nano_banana_edit.py
 
       - name: Upload AI Processed Images
