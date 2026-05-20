@@ -1,43 +1,41 @@
 import os
-from google import genai
 from PIL import Image
-
-# Ngambil API Key dari GitHub Secrets
-api_key = os.environ.get("GEMINI_API_KEY")
-if not api_key:
-    raise ValueError("Bro! API Key belum diset. Masukin GEMINI_API_KEY di GitHub Secrets.")
-
-client = genai.Client(api_key=api_key)
 
 input_dir = "images"
 output_dir = "output_bw_style"
 os.makedirs(output_dir, exist_ok=True)
 
-# Prompt ketat biar Nano-Banana fokus nge-upscale & ganti style, BUKAN ngarang elemen baru
-prompt_text = "Convert this image into a crisp, high-resolution, black and white vector-style graphic. Upscale the quality but DO NOT change the core graphics, shapes, layouts, or original subjects. Just apply the clean monochrome vector aesthetic."
+# Lu bisa ganti angka ini (misal 2, 3, atau 4) buat nentuin seberapa besar upscalenya
+UPSCALE_FACTOR = 2 
 
 for filename in os.listdir(input_dir):
     if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
-        print(f"🍌 Memproses {filename} dengan Nano-Banana...")
+        print(f"🔧 Memproses {filename} secara lokal...")
         img_path = os.path.join(input_dir, filename)
         
         try:
+            # Buka gambar
             img = Image.open(img_path)
             
-            # Memanggil API Nano-Banana (Gemini 3.1 Flash Image / Imagen)
-            result = client.models.generate_images(
-                model='gemini-3.1-flash', 
-                prompt=prompt_text,
-                image=img,
-                number_of_images=1,
-                output_mime_type="image/png"
-            )
+            # 1. Upscale gambar biar resolusinya naik (Pake LANCZOS biar hasilnya tajam)
+            new_size = (int(img.width * UPSCALE_FACTOR), int(img.height * UPSCALE_FACTOR))
+            img_upscaled = img.resize(new_size, Image.Resampling.LANCZOS)
             
-            # Simpan hasil output raster bergaya vektor
-            for i, generated_image in enumerate(result.generated_images):
-                output_path = os.path.join(output_dir, f"bw_{filename}")
-                generated_image.image.save(output_path)
-                print(f"✅ Sukses: {output_path}")
-                
+            # 2. Ubah ke Grayscale (Abu-abu)
+            img_gray = img_upscaled.convert('L')
+            
+            # 3. Terapkan Thresholding biar jadi Hitam Putih Solid (Vector Aesthetic)
+            # Pixel yang lebih terang dari 128 jadi putih, sisanya jadi hitam murni
+            threshold = 128
+            img_bw = img_gray.point(lambda p: 255 if p > threshold else 0)
+            
+            # Ubah format ke 1-bit pixel (murni hitam putih)
+            img_bw = img_bw.convert('1') 
+            
+            # Simpan hasil output raster
+            output_path = os.path.join(output_dir, f"bw_{filename}")
+            img_bw.save(output_path)
+            print(f"✅ Sukses: {output_path}")
+            
         except Exception as e:
             print(f"❌ Gagal memproses {filename}: {e}")
