@@ -99,6 +99,38 @@ jobs:
           pip install realesrgan==0.3.0
 
       ##############################################################
+      # PATCH BASICSR (fix torchvision compatibility)
+      ##############################################################
+
+      - name: Patch basicsr Compatibility
+        run: |
+
+          python - <<'EOF'
+import site, os
+
+patched = False
+
+for sp in site.getsitepackages():
+    f = os.path.join(sp, "basicsr/data/degradations.py")
+    if os.path.exists(f):
+        txt = open(f).read()
+        if "functional_tensor" in txt:
+            txt = txt.replace(
+                "from torchvision.transforms.functional_tensor import rgb_to_grayscale",
+                "from torchvision.transforms.functional import rgb_to_grayscale"
+            )
+            open(f, "w").write(txt)
+            print(f"[PATCHED] {f}")
+            patched = True
+        else:
+            print(f"[SKIP] Already clean: {f}")
+        break
+
+if not patched:
+    print("[WARN] File not found, skipping patch")
+EOF
+
+      ##############################################################
       # DOWNLOAD MODELS
       ##############################################################
 
