@@ -25,6 +25,9 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          # Menggunakan token bawaan agar punya akses untuk melakukan push balik ke repo
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -45,8 +48,18 @@ jobs:
           curl -L -o FSRCNN_x2.pb https://github.com/saafnan/FSRCNN-Tensorflow/raw/master/models/FSRCNN_x2.pb
           python process_image.py
 
-      - name: Upload Processed Image Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: processed-${{ github.event.inputs.process_mode }}
-          path: output_*.png
+      - name: Commit and Push Output Image
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          # Tambahkan file output yang baru digenerate
+          git add output_*.png
+          
+          # Cek apakah ada perubahan file sebelum commit (mencegah error jika tidak ada perubahan)
+          if git diff --staged --quiet; then
+            echo "Tidak ada perubahan gambar yang terdeteksi."
+          else
+            git commit -m "chore: upload hasil proses ${{ github.event.inputs.process_mode }}"
+            git push
+          fi
