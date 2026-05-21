@@ -39,7 +39,6 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          # Pastikan tetap pakai opencv-contrib
           pip install opencv-contrib-python-headless pillow numpy requests
 
       - name: Run Image Processing
@@ -47,9 +46,7 @@ jobs:
           IMAGE_SOURCE: ${{ github.event.inputs.image_source }}
           PROCESS_MODE: ${{ github.event.inputs.process_mode }}
         run: |
-          # MEMPERBAIKI ERROR 'Failed to parse GraphDef': 
-          # Menggunakan link download alternatif yang lebih stabil untuk model FSRCNN_x2.pb
-          curl -L -o FSRCNN_x2.pb "https://media.githubusercontent.com/media/saafnan/FSRCNN-Tensorflow/master/models/FSRCNN_x2.pb"
+          # Perbaikan final: Model AI dibaca langsung dari root repo lokal, tidak download lagi
           python process_image.py
 
       - name: Commit and Push Output Image
