@@ -20,6 +20,7 @@ on:
 
 permissions:
   contents: write
+  releases: write
 
 jobs:
   process-image:
@@ -48,16 +49,30 @@ jobs:
         run: |
           python process_image.py
 
-      - name: Commit and Push Output Image
+      - name: Commit and Push Output Image to Repo
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          
           git add output_*.png
-          
           if git diff --staged --quiet; then
-            echo "Tidak ada perubahan gambar yang terdeteksi."
+            echo "Tidak ada perubahan gambar."
           else
             git commit -m "chore: upload hasil proses ${{ github.event.inputs.process_mode }}"
             git push
           fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ github.run_number }}"
+          name: "Nano Banana Release #${{ github.run_number }}"
+          body: |
+            Hasil pemrosesan gambar selesai dikerjakan!
+            - **Mode Pemrosesan:** ${{ github.event.inputs.process_mode }}
+            - **Source:** ${{ github.event.inputs.image_source }}
+          draft: false
+          prerelease: false
+          files: |
+            output_*.png
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
