@@ -24,34 +24,18 @@ jobs:
 
     steps:
 
-      ##############################################################
-      # CHECKOUT
-      ##############################################################
-
       - name: Checkout
         uses: actions/checkout@v4
-
-      ##############################################################
-      # SYSTEM PACKAGES
-      ##############################################################
 
       - name: Install System Packages
         run: |
           sudo apt update
           sudo apt install -y ffmpeg imagemagick potrace wget libgl1 libglib2.0-0
 
-      ##############################################################
-      # PYTHON
-      ##############################################################
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
-
-      ##############################################################
-      # PYTHON PACKAGES
-      ##############################################################
 
       - name: Install Python Packages
         run: |
@@ -63,18 +47,10 @@ jobs:
           pip install gfpgan==1.3.8
           pip install realesrgan==0.3.0
 
-      ##############################################################
-      # PATCH BASICSR (fix torchvision compatibility)
-      ##############################################################
-
       - name: Patch basicsr Compatibility
         run: |
           find /opt -name "degradations.py" -path "*/basicsr/*" -exec sed -i 's/from torchvision.transforms.functional_tensor import rgb_to_grayscale/from torchvision.transforms.functional import rgb_to_grayscale/g' {} \;
           echo "Patch done"
-
-      ##############################################################
-      # DOWNLOAD MODELS
-      ##############################################################
 
       - name: Download Models
         run: |
@@ -82,18 +58,10 @@ jobs:
           wget -O models/RealESRGAN_x4plus.pth https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth
           wget -O models/GFPGANv1.4.pth https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.4.pth
 
-      ##############################################################
-      # DOWNLOAD INPUT IMAGE
-      ##############################################################
-
       - name: Download Image
         run: |
           mkdir -p input
           wget "${{ github.event.inputs.image_url }}" -O input/input.jpg
-
-      ##############################################################
-      # CREATE PROCESS SCRIPT
-      ##############################################################
 
       - name: Create AI Script
         run: |
@@ -101,8 +69,7 @@ jobs:
           import os
           import cv2
           import numpy as np
-          from PIL import Image
-          from PIL import ImageFilter
+          from PIL import Image, ImageFilter
 
           mode = "${{ github.event.inputs.mode }}"
           os.makedirs("output", exist_ok=True)
@@ -113,12 +80,33 @@ jobs:
 
           if mode == "upscale":
               import torch
-              from realesrgan import RealESRGAN
+              from realesrgan import RealESRGANer
+              from basicsr.archs.rrdbnet_arch import RRDBNet
+
               print("Running AI Upscale...")
-              device = torch.device("cpu")
-              model = RealESRGAN(device, scale=4)
-              model.load_weights("models/RealESRGAN_x4plus.pth", download=False)
-              sr_image = model.predict(img)
+
+              model = RRDBNet(
+                  num_in_ch=3,
+                  num_out_ch=3,
+                  num_feat=64,
+                  num_block=23,
+                  num_grow_ch=32,
+                  scale=4
+              )
+
+              upsampler = RealESRGANer(
+                  scale=4,
+                  model_path="models/RealESRGAN_x4plus.pth",
+                  model=model,
+                  tile=0,
+                  tile_pad=10,
+                  pre_pad=0,
+                  half=False
+              )
+
+              img_np = np.array(img)
+              output, _ = upsampler.enhance(img_np, outscale=4)
+              sr_image = Image.fromarray(output)
               sr_image = sr_image.filter(ImageFilter.SHARPEN)
               sr_image.save(output_path)
               print("Upscale Finished")
@@ -159,17 +147,9 @@ jobs:
           print("ALL DONE")
           PY
 
-      ##############################################################
-      # RUN PROCESS
-      ##############################################################
-
       - name: Run AI Processor
         run: |
           python process.py
-
-      ##############################################################
-      # UPLOAD RESULT
-      ##############################################################
 
       - name: Upload Result
         uses: actions/upload-artifact@v4
