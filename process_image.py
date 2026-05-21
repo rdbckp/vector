@@ -10,13 +10,12 @@ def get_env_variables():
     return image_source, process_mode
 
 def load_image(source):
-    # Cek apakah input berupa URL
+    # Cek apakah input berupa URL internet
     if source.startswith("http://") or source.startswith("https://"):
         print(f"[+] Mendownload gambar dari URL: {source}")
         try:
             response = requests.get(source, timeout=15)
             response.raise_for_status()
-            # Ubah bytes data menjadi numpy array untuk dibaca OpenCV
             image_array = np.asarray(bytearray(response.content), dtype=np.uint8)
             img = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
             if img is None:
@@ -35,16 +34,36 @@ def load_image(source):
         return cv2.imread(source)
 
 def process_upscale(img):
-    h, w = img.shape[:2]
-    return cv2.resize(img, (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
+    model_path = "FSRCNN_x2.pb"
+    if not os.path.exists(model_path):
+        print("[-] Model AI FSRCNN_x2.pb tidak ditemukan, fallback ke resize biasa...")
+        h, w = img.shape[:2]
+        return cv2.resize(img, (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
+        
+    print("[+] Menjalankan AI Super Resolution (FSRCNN x2)...")
+    try:
+        # Inisialisasi modul Super Resolution OpenCV
+        sr = cv2.dnn_superres.DnnSuperResImpl_create()
+        sr.readModel(model_path)
+        sr.setModel("fsrcnn", 2) # Skala pembesaran 2x lipat
+        
+        # Eksekusi AI upscale gambar
+        upscaled_img = sr.upsample(img)
+        return upscaled_img
+    except Exception as e:
+        print(f"[-] Gagal memproses AI Upscale: {e}. Fallback ke kubik.")
+        h, w = img.shape[:2]
+        return cv2.resize(img, (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
 
 def process_vector_bw(img):
+    # Mengubah ke grayscale -> adaptive thresholding untuk efek tracing vector tajam hitam putih
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     bw = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
                                cv2.THRESH_BINARY, 11, 2)
     return bw
 
 def process_cartoon(img):
+    # Menggunakan Bilateral Filter untuk menghaluskan warna tapi menjaga edge tetap tajam
     color = cv2.bilateralFilter(img, d=9, sigmaColor=75, sigmaSpace=75)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     blur = cv2.medianBlur(gray, 5)
@@ -53,6 +72,7 @@ def process_cartoon(img):
     return cv2.bitwise_and(color, color, mask=edges)
 
 def process_3d_style(img):
+    # Efek timbul (Emboss) untuk memberikan tekstur kedalaman
     blur = cv2.GaussianBlur(img, (3, 3), 0)
     emboss_kernel = np.array([[ -2, -1, 0],
                               [ -1,  1, 1],
