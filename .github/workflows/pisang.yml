@@ -13,14 +13,13 @@ on:
         default: 'upscale'
         type: choice
         options:
-          - upscale
-          - image vector hitam putih
-          - cartoon style
-          - 3D style
+          - 'upscale'
+          - 'vector_bw'
+          - 'cartoon'
+          - 'style_3d'
 
 permissions:
   contents: write
-  releases: write
 
 jobs:
   process-image:
