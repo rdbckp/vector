@@ -5,20 +5,20 @@ import numpy as np
 import requests
 from PIL import Image
 import io
+from super_image import EdsrModel, ImageLoader
 
 def get_env_variables():
     image_source = os.environ.get("IMAGE_SOURCE", "").strip()
     process_mode = os.environ.get("PROCESS_MODE", "upscale")
     return image_source, process_mode
 
-def load_image_bytes(source):
-    # Mengambil bytes gambar langsung agar bisa dikirim ke API luar jika dibutuhkan
+def load_image_pil(source):
     if source.startswith("http://") or source.startswith("https://"):
         print(f"[+] Mendownload gambar dari URL: {source}")
         try:
             response = requests.get(source, timeout=15)
             response.raise_for_status()
-            return response.content
+            return Image.open(io.BytesIO(response.content)).convert("RGB")
         except Exception as e:
             print(f"[-] Gagal mendownload gambar. Error: {e}")
             sys.exit(1)
@@ -27,53 +27,24 @@ def load_image_bytes(source):
             print(f"[-] Error: File lokal '{source}' tidak ditemukan!")
             sys.exit(1)
         print(f"[+] Membaca file lokal: {source}")
-        with open(source, "rb") as f:
-            return f.read()
+        return Image.open(source).convert("RGB")
 
-def process_upscale_ai(img_bytes):
-    print("[+] Mengirim gambar ke Cloud AI Engine untuk Upscale 2x (Anti-Burik)...")
-    
-    # Menggunakan endpoint API publik Real-ESRGAN / BigJPG alternatif untuk pengolahan AI murni
-    url = "https://api.claid.ai/v1/render" # Fallback/Mock routing atau proxying via public space
-    # Kita gunakan public rapid-api/free space waifu2x engine alternatif via requests yang stabil:
+def process_upscale_ai(pil_img):
+    print("[+] Menjalankan Deep Learning AI (EDSR Model x2) - Anti Burik...")
     try:
-        # Menggunakan microservice engine upscaler gratisan yang andal
-        api_url = "https://images.weserv.nl/?url=" 
-        # Jika gambar berbasis local, kita konversi via free reconstruction api
-        # Untuk keandalan penuh tanpa token, kita tembak server public deep-learning upscaler:
-        files = {'file': ('image.png', img_bytes, 'image/png')}
+        # Load pre-trained model AI khusus penanganan restorasi gambar hancur
+        model = EdsrModel.from_pretrained('eugenesiow/edsr-base', scale=2)
+        inputs = ImageLoader.load_image(pil_img)
+        preds = model(inputs)
         
-        # Tembak cloud space gratisan yang menyediakan upscale waifu2x/esrgan open-source
-        response = requests.post("https://v2.convertapi.com/d/image/to/upscale", files=files, timeout=30)
-        
-        # Skenario cadangan taktis: Jika cloud microservice sibuk, gunakan teknik pemrosesan super-resolusi internal berbasis matriks piramida OpenCV yang ditingkatkan (Bicubic + Sharpening CLAHE)
-        raise Exception("Memicu optimalisasi lokal performa tinggi")
-    except Exception:
-        print("[!] Cloud API sibuk / dibatasi. Mengaktifkan Mode Super-Resolution Adaptif (Nano-Banana Engine Spec)...")
-        # Mengubah bytes ke format OpenCV Mat
-        nparr = np.frombuffer(img_bytes, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        
-        # Skema Upscale Ciamik: Gabungan Laplacian Pyramid + Denoising + Kontras Adaptif (CLAHE)
-        # 1. Denoise dulu biar kompresi burik/pecah bawaan gambarnya hilang
-        dst = cv2.fastNearsightedMeanDenoisingColored(img, None, 3, 3, 7, 21) if img.shape[0] > 300 else img
-        
-        # 2. Perbesar dengan interpolasi Cubic + Lanczos gabungan
-        h, w = dst.shape[:2]
-        resized = cv2.resize(dst, (w * 2, h * 2), interpolation=cv2.INTER_LANCZOS4)
-        
-        # 3. Masuk ke lab pewarnaan LAB untuk naikin ketajaman detail tanpa merusak warna asli
-        lab = cv2.cvtColor(resized, cv2.COLOR_BGR2LAB)
-        l, a, b = cv2.split(lab)
-        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
-        cl = clahe.apply(l)
-        limg = cv2.merge((cl,a,b))
-        enhanced = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
-        
-        # 4. Filter Penajaman Mikro akhir
-        kernel = np.array([[0, -0.5, 0], [-0.5, 3, -0.5], [0, -0.5, 0]])
-        final_img = cv2.filter2D(enhanced, -1, kernel)
-        return final_img
+        # Simpan hasil prediksi tensor AI ke PIL Image
+        output_dir = "./"
+        ImageLoader.save_image(preds, os.path.join(output_dir, "output_upscale.png"))
+        print("[+] AI Sukses merekonstruksi gambar!")
+        return True
+    except Exception as e:
+        print(f"[-] AI gagal berjalan: {e}. Fallback ke algoritma filter kontras...")
+        return False
 
 def process_vector_bw(img):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -99,31 +70,35 @@ def main():
         print("[-] Error: Input Image Source kosong!")
         sys.exit(1)
         
-    img_bytes = load_image_bytes(image_source)
+    pil_img = load_image_pil(image_source)
     print(f"[+] Memproses menggunakan mode: {process_mode}")
     
     output_path = f"output_{process_mode.replace(' ', '_')}.png"
     
     if process_mode == "upscale":
-        out = process_upscale_ai(img_bytes)
-        cv2.imwrite(output_path, out)
+        success = process_upscale_ai(pil_img)
+        if not success:
+            # Fallback jika model crash (ubah PIL ke OpenCV)
+            img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+            h, w = img.shape[:2]
+            out = cv2.resize(img, (w * 2, h * 2), interpolation=cv2.INTER_LANCZOS4)
+            cv2.imwrite(output_path, out)
     else:
-        # Untuk mode selain upscale, pakai engine OpenCV Mat biasa
-        nparr = np.frombuffer(img_bytes, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        # Konversi PIL ke format matriks OpenCV untuk mode efek lainnya
+        img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
         
-        if process_mode == "image vector hitam putih":
+        if process_mode == "vector_bw":
             out = process_vector_bw(img)
-        elif process_mode == "cartoon style":
+        elif process_mode == "cartoon":
             out = process_cartoon(img)
-        elif process_mode == "3D style":
+        elif process_mode == "style_3d":
             out = process_3d_style(img)
         else:
-            print("[-] Mode tidak dikenali.")
+            print(f"[-] Mode '{process_mode}' tidak dikenali.")
             sys.exit(1)
         cv2.imwrite(output_path, out)
         
-    print(f"[+] Sukses! Hasil disimpan di {output_path}")
+    print(f"[+] Selesai! Hasil akhir diproses.")
 
 if __name__ == "__main__":
     main()
