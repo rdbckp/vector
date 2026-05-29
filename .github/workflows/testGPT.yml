@@ -72,11 +72,11 @@ jobs:
 
           curl -f -sS \
             -X POST \
-            "https://api.stability.ai/v2beta/stable-image/edit/sketch" \
+            "https://api.stability.ai/v2beta/stable-image/edit/structure" \
             -H "Authorization: Bearer ${STABILITY_API_KEY}" \
             -H "Accept: image/*" \
             -F "image=@${INPUT_FILE}" \
-            -F 'prompt=convert this exact image into a clean black and white vector stencil, preserve original composition, preserve object shape, preserve exact silhouette, minimal artistic changes, smooth edges, high contrast, logo style, monochrome, clean white background' \
+            -F 'prompt=convert this exact image into a clean black and white vector stencil, preserve exact composition, preserve object silhouette, preserve shape, smooth vector edges, monochrome, white background, black subject, professional stencil art, minimal artistic change' \
             -F 'control_strength=0.95' \
             -F 'seed=1' \
             -o output/final_bw.png
