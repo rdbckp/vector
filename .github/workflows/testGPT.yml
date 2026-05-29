@@ -1,4 +1,3 @@
-```yaml
 name: Angel BW Clean
 
 on:
@@ -159,4 +158,3 @@ jobs:
         with:
           name: final_bw
           path: output/final_bw.png
-```
