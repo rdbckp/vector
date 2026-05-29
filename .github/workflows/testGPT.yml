@@ -1,4 +1,3 @@
-```yaml
 name: AI Vector BW PNG
 
 on:
@@ -180,4 +179,3 @@ jobs:
         with:
           name: final_bw
           path: output/final_bw.png
-```
