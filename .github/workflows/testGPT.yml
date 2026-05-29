@@ -1,0 +1,144 @@
+name: Vector Black White GPT
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Pilih mode proses"
+        required: true
+        default: "vector_bw"
+        type: choice
+        options:
+          - vector_bw
+          - upscale
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          sudo apt update
+
+          # ImageMagick
+          sudo apt install -y imagemagick
+
+          # Potrace buat vector tracing
+          sudo apt install -y potrace
+
+          # Inkscape buat export SVG/PNG
+          sudo apt install -y inkscape
+
+          # Python
+          sudo apt install -y python3 python3-pip
+
+          pip3 install pillow opencv-python numpy
+
+      - name: Prepare Folder
+        run: |
+          mkdir -p input
+          mkdir -p output
+
+      - name: Show Input Files
+        run: |
+          echo "Isi folder input:"
+          ls -lah input || true
+
+      ###################################################
+      # MODE VECTOR BLACK WHITE
+      ###################################################
+      - name: Generate Vector Black White
+        if: ${{ github.event.inputs.mode == 'vector_bw' }}
+        run: |
+
+          FILE=$(find input -type f | head -n 1)
+
+          echo "Processing: $FILE"
+
+          python3 << 'PY'
+          import cv2
+          import numpy as np
+          from PIL import Image
+          import os
+          import glob
+
+          files = glob.glob("input/*")
+
+          if not files:
+              raise Exception("Tidak ada file di folder input")
+
+          file = files[0]
+
+          img = cv2.imread(file, cv2.IMREAD_GRAYSCALE)
+
+          # upscale dulu biar tracing lebih halus
+          img = cv2.resize(
+              img,
+              None,
+              fx=4,
+              fy=4,
+              interpolation=cv2.INTER_CUBIC
+          )
+
+          # denoise
+          img = cv2.GaussianBlur(img, (5,5), 0)
+
+          # auto threshold
+          _, th = cv2.threshold(
+              img,
+              0,
+              255,
+              cv2.THRESH_BINARY + cv2.THRESH_OTSU
+          )
+
+          # invert biar object hitam
+          th = 255 - th
+
+          cv2.imwrite("output/vector_bw.png", th)
+          PY
+
+          # convert PNG -> PBM
+          convert output/vector_bw.png output/vector_bw.pbm
+
+          # trace jadi SVG vector
+          potrace output/vector_bw.pbm \
+            -s \
+            -o output/vector_bw.svg \
+            --turdsize 2 \
+            --alphamax 1.0 \
+            --opttolerance 0.2
+
+          # preview PNG
+          inkscape output/vector_bw.svg \
+            --export-type=png \
+            --export-filename=output/vector_bw_preview.png
+
+      ###################################################
+      # MODE UPSCALE
+      ###################################################
+      - name: Upscale Image
+        if: ${{ github.event.inputs.mode == 'upscale' }}
+        run: |
+
+          FILE=$(find input -type f | head -n 1)
+
+          echo "Upscaling: $FILE"
+
+          convert "$FILE" \
+            -filter Lanczos \
+            -resize 400% \
+            -sharpen 0x1.2 \
+            output/upscaled.png
+
+      ###################################################
+      # Upload Result
+      ###################################################
+      - name: Upload Result
+        uses: actions/upload-artifact@v4
+        with:
+          name: result
+          path: output/
