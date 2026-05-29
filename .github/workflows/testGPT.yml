@@ -72,13 +72,13 @@ jobs:
 
           curl -f -sS \
             -X POST \
-            "https://api.stability.ai/v2beta/stable-image/generate/sd3" \
+            "https://api.stability.ai/v2beta/stable-image/edit/sketch" \
             -H "Authorization: Bearer ${STABILITY_API_KEY}" \
             -H "Accept: image/*" \
             -F "image=@${INPUT_FILE}" \
-            -F 'mode=image-to-image' \
-            -F 'strength=0.8' \
-            -F 'prompt=${{ github.event.inputs.prompt }}, clean silhouette, smooth vector style, white background, black subject, minimal details, professional stencil art, ultra clean edges, logo style' \
+            -F 'prompt=convert this exact image into a clean black and white vector stencil, preserve original composition, preserve object shape, preserve exact silhouette, minimal artistic changes, smooth edges, high contrast, logo style, monochrome, clean white background' \
+            -F 'control_strength=0.95' \
+            -F 'seed=1' \
             -o output/final_bw.png
 
       ##########################################################
