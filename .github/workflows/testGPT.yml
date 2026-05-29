@@ -1,4 +1,4 @@
-name: BW Vector Clean PNG
+name: AI Silhouette Rebuild
 
 on:
   workflow_dispatch:
@@ -18,16 +18,17 @@ jobs:
           sudo apt install -y python3-pip
 
           pip3 install \
+            opencv-python \
             pillow \
             numpy \
-            opencv-python
+            scipy
 
       - name: Prepare Folder
         run: |
           mkdir -p input
           mkdir -p output
 
-      - name: Process Image
+      - name: AI Style Silhouette Rebuild
         run: |
 
           python3 << 'PY'
@@ -35,6 +36,7 @@ jobs:
           import cv2
           import numpy as np
           import glob
+          from scipy.ndimage import binary_fill_holes
 
           files = glob.glob("input/*")
 
@@ -43,130 +45,182 @@ jobs:
 
           file = files[0]
 
-          # =========================
+          # ====================================
           # LOAD
-          # =========================
+          # ====================================
 
           img = cv2.imread(file)
 
-          # =========================
+          # ====================================
           # UPSCALE
-          # =========================
+          # ====================================
 
           img = cv2.resize(
               img,
               None,
-              fx=8,
-              fy=8,
+              fx=10,
+              fy=10,
               interpolation=cv2.INTER_CUBIC
           )
 
-          # =========================
+          # ====================================
           # GRAYSCALE
-          # =========================
+          # ====================================
 
           gray = cv2.cvtColor(
               img,
               cv2.COLOR_BGR2GRAY
           )
 
-          # =========================
-          # CONTRAST BOOST
-          # =========================
+          # ====================================
+          # CLAHE CONTRAST
+          # ====================================
 
-          gray = cv2.convertScaleAbs(
-              gray,
-              alpha=2.2,
-              beta=20
+          clahe = cv2.createCLAHE(
+              clipLimit=3.0,
+              tileGridSize=(8,8)
           )
 
-          # =========================
-          # BLUR
-          # =========================
+          gray = clahe.apply(gray)
+
+          # ====================================
+          # DENOISE
+          # ====================================
+
+          gray = cv2.fastNlMeansDenoising(
+              gray,
+              None,
+              20,
+              7,
+              21
+          )
+
+          # ====================================
+          # SOFT BLUR
+          # ====================================
 
           blur = cv2.GaussianBlur(
               gray,
-              (7,7),
+              (11,11),
               0
           )
 
-          # =========================
-          # OTSU THRESHOLD
-          # =========================
+          # ====================================
+          # BRIGHT REGION EXTRACTION
+          # ====================================
 
-          _, th = cv2.threshold(
+          _, mask = cv2.threshold(
               blur,
-              0,
+              160,
               255,
-              cv2.THRESH_BINARY + cv2.THRESH_OTSU
+              cv2.THRESH_BINARY
           )
 
-          # =========================
-          # INVERT
-          # =========================
+          # ====================================
+          # REMOVE FRAME BORDER
+          # ====================================
 
-          th = 255 - th
+          h, w = mask.shape
 
-          # =========================
-          # MORPH CLEANUP
-          # =========================
+          border = 20
 
-          kernel = np.ones((5,5), np.uint8)
+          mask[:border,:] = 0
+          mask[-border:,:] = 0
+          mask[:,:border] = 0
+          mask[:,-border:] = 0
 
-          th = cv2.morphologyEx(
-              th,
+          # ====================================
+          # MORPH CLOSE
+          # ====================================
+
+          kernel = cv2.getStructuringElement(
+              cv2.MORPH_ELLIPSE,
+              (9,9)
+          )
+
+          mask = cv2.morphologyEx(
+              mask,
               cv2.MORPH_CLOSE,
-              kernel
+              kernel,
+              iterations=3
           )
 
-          th = cv2.morphologyEx(
-              th,
+          # ====================================
+          # MORPH OPEN
+          # ====================================
+
+          mask = cv2.morphologyEx(
+              mask,
               cv2.MORPH_OPEN,
-              kernel
+              kernel,
+              iterations=1
           )
 
-          # =========================
-          # KEEP BIG OBJECTS ONLY
-          # =========================
+          # ====================================
+          # KEEP LARGEST OBJECT
+          # ====================================
 
-          num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
-              th,
-              8
+          contours, _ = cv2.findContours(
+              mask,
+              cv2.RETR_EXTERNAL,
+              cv2.CHAIN_APPROX_SIMPLE
           )
 
-          clean = np.zeros_like(th)
+          clean = np.zeros_like(mask)
 
-          for i in range(1, num_labels):
+          if contours:
 
-              area = stats[i, cv2.CC_STAT_AREA]
+              biggest = max(
+                  contours,
+                  key=cv2.contourArea
+              )
 
-              if area > 5000:
-                  clean[labels == i] = 255
+              cv2.drawContours(
+                  clean,
+                  [biggest],
+                  -1,
+                  255,
+                  thickness=cv2.FILLED
+              )
 
-          # =========================
+          # ====================================
+          # FILL HOLES
+          # ====================================
+
+          filled = binary_fill_holes(
+              clean > 0
+          ).astype(np.uint8) * 255
+
+          # ====================================
           # FINAL SMOOTH
-          # =========================
+          # ====================================
 
-          clean = cv2.GaussianBlur(
-              clean,
-              (5,5),
+          smooth = cv2.GaussianBlur(
+              filled,
+              (9,9),
               0
           )
 
-          _, clean = cv2.threshold(
-              clean,
+          _, smooth = cv2.threshold(
+              smooth,
               127,
               255,
               cv2.THRESH_BINARY
           )
 
-          # =========================
+          # ====================================
+          # INVERT
+          # ====================================
+
+          final = 255 - smooth
+
+          # ====================================
           # SAVE
-          # =========================
+          # ====================================
 
           cv2.imwrite(
               "output/final_bw.png",
-              clean
+              final
           )
 
           PY
