@@ -1,229 +1,97 @@
-name: AI Silhouette Rebuild
+name: Ultimate AI Vector Redraw
 
 on:
   workflow_dispatch:
+    inputs:
+      prompt:
+        description: "AI style prompt"
+        required: false
+        default: "high contrast black and white vector stencil illustration"
 
 jobs:
-  render:
+  ai_redraw:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Dependencies
+      ##########################################################
+      # INSTALL
+      ##########################################################
+
+      - name: Install Packages
         run: |
           sudo apt update
 
-          sudo apt install -y python3-pip
+          sudo apt install -y \
+            python3-pip \
+            jq \
+            curl
 
           pip3 install \
-            opencv-python \
             pillow \
-            numpy \
-            scipy
+            requests
+
+      ##########################################################
+      # PREPARE
+      ##########################################################
 
       - name: Prepare Folder
         run: |
           mkdir -p input
           mkdir -p output
 
-      - name: AI Style Silhouette Rebuild
+      ##########################################################
+      # FIND IMAGE
+      ##########################################################
+
+      - name: Find Input Image
+        id: image
         run: |
 
-          python3 << 'PY'
+          FILE=$(find input -type f | head -n 1)
 
-          import cv2
-          import numpy as np
-          import glob
-          from scipy.ndimage import binary_fill_holes
+          if [ -z "$FILE" ]; then
+            echo "No image found"
+            exit 1
+          fi
 
-          files = glob.glob("input/*")
+          echo "file=$FILE" >> $GITHUB_OUTPUT
 
-          if not files:
-              raise Exception("No image found")
+      ##########################################################
+      # AI REDRAW USING STABILITY AI
+      ##########################################################
 
-          file = files[0]
+      - name: AI Black White Redraw
+        env:
+          STABILITY_API_KEY: ${{ secrets.STABILITY_API_KEY }}
+        run: |
 
-          # ====================================
-          # LOAD
-          # ====================================
+          INPUT_FILE="${{ steps.image.outputs.file }}"
 
-          img = cv2.imread(file)
+          curl -f -sS \
+            -X POST \
+            "https://api.stability.ai/v2beta/stable-image/generate/sd3" \
+            -H "Authorization: Bearer ${STABILITY_API_KEY}" \
+            -H "Accept: image/*" \
+            -F "image=@${INPUT_FILE}" \
+            -F 'mode=image-to-image' \
+            -F 'strength=0.8' \
+            -F 'prompt=${{ github.event.inputs.prompt }}, clean silhouette, smooth vector style, white background, black subject, minimal details, professional stencil art, ultra clean edges, logo style' \
+            -o output/final_bw.png
 
-          # ====================================
-          # UPSCALE
-          # ====================================
+      ##########################################################
+      # VERIFY
+      ##########################################################
 
-          img = cv2.resize(
-              img,
-              None,
-              fx=10,
-              fy=10,
-              interpolation=cv2.INTER_CUBIC
-          )
+      - name: Verify Output
+        run: |
+          ls -lah output/
 
-          # ====================================
-          # GRAYSCALE
-          # ====================================
-
-          gray = cv2.cvtColor(
-              img,
-              cv2.COLOR_BGR2GRAY
-          )
-
-          # ====================================
-          # CLAHE CONTRAST
-          # ====================================
-
-          clahe = cv2.createCLAHE(
-              clipLimit=3.0,
-              tileGridSize=(8,8)
-          )
-
-          gray = clahe.apply(gray)
-
-          # ====================================
-          # DENOISE
-          # ====================================
-
-          gray = cv2.fastNlMeansDenoising(
-              gray,
-              None,
-              20,
-              7,
-              21
-          )
-
-          # ====================================
-          # SOFT BLUR
-          # ====================================
-
-          blur = cv2.GaussianBlur(
-              gray,
-              (11,11),
-              0
-          )
-
-          # ====================================
-          # BRIGHT REGION EXTRACTION
-          # ====================================
-
-          _, mask = cv2.threshold(
-              blur,
-              160,
-              255,
-              cv2.THRESH_BINARY
-          )
-
-          # ====================================
-          # REMOVE FRAME BORDER
-          # ====================================
-
-          h, w = mask.shape
-
-          border = 20
-
-          mask[:border,:] = 0
-          mask[-border:,:] = 0
-          mask[:,:border] = 0
-          mask[:,-border:] = 0
-
-          # ====================================
-          # MORPH CLOSE
-          # ====================================
-
-          kernel = cv2.getStructuringElement(
-              cv2.MORPH_ELLIPSE,
-              (9,9)
-          )
-
-          mask = cv2.morphologyEx(
-              mask,
-              cv2.MORPH_CLOSE,
-              kernel,
-              iterations=3
-          )
-
-          # ====================================
-          # MORPH OPEN
-          # ====================================
-
-          mask = cv2.morphologyEx(
-              mask,
-              cv2.MORPH_OPEN,
-              kernel,
-              iterations=1
-          )
-
-          # ====================================
-          # KEEP LARGEST OBJECT
-          # ====================================
-
-          contours, _ = cv2.findContours(
-              mask,
-              cv2.RETR_EXTERNAL,
-              cv2.CHAIN_APPROX_SIMPLE
-          )
-
-          clean = np.zeros_like(mask)
-
-          if contours:
-
-              biggest = max(
-                  contours,
-                  key=cv2.contourArea
-              )
-
-              cv2.drawContours(
-                  clean,
-                  [biggest],
-                  -1,
-                  255,
-                  thickness=cv2.FILLED
-              )
-
-          # ====================================
-          # FILL HOLES
-          # ====================================
-
-          filled = binary_fill_holes(
-              clean > 0
-          ).astype(np.uint8) * 255
-
-          # ====================================
-          # FINAL SMOOTH
-          # ====================================
-
-          smooth = cv2.GaussianBlur(
-              filled,
-              (9,9),
-              0
-          )
-
-          _, smooth = cv2.threshold(
-              smooth,
-              127,
-              255,
-              cv2.THRESH_BINARY
-          )
-
-          # ====================================
-          # INVERT
-          # ====================================
-
-          final = 255 - smooth
-
-          # ====================================
-          # SAVE
-          # ====================================
-
-          cv2.imwrite(
-              "output/final_bw.png",
-              final
-          )
-
-          PY
+      ##########################################################
+      # UPLOAD FINAL PNG ONLY
+      ##########################################################
 
       - name: Upload Final PNG
         uses: actions/upload-artifact@v4
