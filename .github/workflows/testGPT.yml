@@ -1,4 +1,5 @@
-name: AI Vector BW PNG
+```yaml
+name: Angel BW Clean
 
 on:
   workflow_dispatch:
@@ -15,9 +16,7 @@ jobs:
         run: |
           sudo apt update
 
-          sudo apt install -y \
-            imagemagick \
-            python3-pip
+          sudo apt install -y python3-pip
 
           pip3 install \
             pillow \
@@ -29,7 +28,7 @@ jobs:
           mkdir -p input
           mkdir -p output
 
-      - name: Generate Clean Black White PNG
+      - name: Process Image
         run: |
 
           python3 << 'PY'
@@ -41,7 +40,7 @@ jobs:
           files = glob.glob("input/*")
 
           if not files:
-              raise Exception("No image found inside input folder")
+              raise Exception("No image found")
 
           file = files[0]
 
@@ -58,8 +57,8 @@ jobs:
           img = cv2.resize(
               img,
               None,
-              fx=6,
-              fy=6,
+              fx=8,
+              fy=8,
               interpolation=cv2.INTER_CUBIC
           )
 
@@ -73,103 +72,84 @@ jobs:
           )
 
           # =========================
-          # DENOISE
-          # =========================
-
-          gray = cv2.fastNlMeansDenoising(
-              gray,
-              None,
-              15,
-              7,
-              21
-          )
-
-          # =========================
           # SMOOTH
           # =========================
 
           blur = cv2.GaussianBlur(
               gray,
-              (7,7),
+              (9,9),
               0
           )
 
           # =========================
-          # ADAPTIVE THRESHOLD
+          # BRIGHTNESS MASK
           # =========================
 
-          th = cv2.adaptiveThreshold(
+          _, mask = cv2.threshold(
               blur,
-              255,
-              cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-              cv2.THRESH_BINARY,
-              51,
-              2
-          )
-
-          # invert jadi object hitam
-          th = 255 - th
-
-          # =========================
-          # MORPH CLEANUP
-          # =========================
-
-          kernel = np.ones((3,3), np.uint8)
-
-          th = cv2.morphologyEx(
-              th,
-              cv2.MORPH_OPEN,
-              kernel
-          )
-
-          th = cv2.morphologyEx(
-              th,
-              cv2.MORPH_CLOSE,
-              kernel
-          )
-
-          # =========================
-          # REMOVE SMALL NOISE
-          # =========================
-
-          num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
-              th,
-              8
-          )
-
-          clean = np.zeros_like(th)
-
-          for i in range(1, num_labels):
-
-              area = stats[i, cv2.CC_STAT_AREA]
-
-              if area > 150:
-                  clean[labels == i] = 255
-
-          # =========================
-          # FINAL SMOOTH
-          # =========================
-
-          clean = cv2.GaussianBlur(
-              clean,
-              (3,3),
-              0
-          )
-
-          _, clean = cv2.threshold(
-              clean,
-              127,
+              185,
               255,
               cv2.THRESH_BINARY
           )
 
           # =========================
-          # SAVE FINAL PNG
+          # CLEANUP
+          # =========================
+
+          kernel = np.ones((5,5), np.uint8)
+
+          mask = cv2.morphologyEx(
+              mask,
+              cv2.MORPH_CLOSE,
+              kernel
+          )
+
+          mask = cv2.morphologyEx(
+              mask,
+              cv2.MORPH_OPEN,
+              kernel
+          )
+
+          # =========================
+          # KEEP ONLY BIGGEST OBJECT
+          # =========================
+
+          contours, _ = cv2.findContours(
+              mask,
+              cv2.RETR_EXTERNAL,
+              cv2.CHAIN_APPROX_SIMPLE
+          )
+
+          clean = np.zeros_like(mask)
+
+          if contours:
+
+              biggest = max(
+                  contours,
+                  key=cv2.contourArea
+              )
+
+              cv2.drawContours(
+                  clean,
+                  [biggest],
+                  -1,
+                  255,
+                  thickness=cv2.FILLED
+              )
+
+          # =========================
+          # INVERT
+          # =========================
+
+          final = 255 - clean
+
+          # =========================
+          # SAVE PNG
           # =========================
 
           cv2.imwrite(
               "output/final_bw.png",
-              clean
+              final
           )
 
           PY
@@ -179,3 +159,4 @@ jobs:
         with:
           name: final_bw
           path: output/final_bw.png
+```
