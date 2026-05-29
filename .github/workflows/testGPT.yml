@@ -2,17 +2,17 @@ name: Ultimate AI Vector Redraw
 
 on:
   workflow_dispatch:
-    inputs:
-      prompt:
-        description: "AI style prompt"
-        required: false
-        default: "high contrast black and white vector stencil illustration"
 
 jobs:
-  ai_redraw:
+  ai_vector:
     runs-on: ubuntu-latest
 
     steps:
+
+      ##########################################################
+      # CHECKOUT
+      ##########################################################
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -26,12 +26,14 @@ jobs:
 
           sudo apt install -y \
             python3-pip \
-            jq \
-            curl
+            curl \
+            jq
 
           pip3 install \
             pillow \
-            requests
+            requests \
+            opencv-python \
+            numpy
 
       ##########################################################
       # PREPARE
@@ -39,36 +41,100 @@ jobs:
 
       - name: Prepare Folder
         run: |
-          mkdir -p input
           mkdir -p output
 
       ##########################################################
-      # FIND IMAGE
+      # FIND INPUT IMAGE
       ##########################################################
 
-      - name: Find Input Image
-        id: image
+      - name: Find Image
+        id: img
         run: |
 
           FILE=$(find input -type f | head -n 1)
 
           if [ -z "$FILE" ]; then
-            echo "No image found"
+            echo "No image found in input folder"
             exit 1
           fi
 
           echo "file=$FILE" >> $GITHUB_OUTPUT
 
       ##########################################################
-      # AI REDRAW USING STABILITY AI
+      # PREPROCESS IMAGE
       ##########################################################
 
-      - name: AI Black White Redraw
+      - name: AI Preprocess
+        run: |
+
+          python3 << 'PY'
+
+          import cv2
+          import numpy as np
+
+          input_path = "${{ steps.img.outputs.file }}"
+
+          img = cv2.imread(input_path)
+
+          # ======================================
+          # UPSCALE
+          # ======================================
+
+          img = cv2.resize(
+              img,
+              None,
+              fx=2,
+              fy=2,
+              interpolation=cv2.INTER_CUBIC
+          )
+
+          # ======================================
+          # REMOVE BORDER
+          # ======================================
+
+          h, w = img.shape[:2]
+
+          crop = 20
+
+          img = img[
+              crop:h-crop,
+              crop:w-crop
+          ]
+
+          # ======================================
+          # DENOISE
+          # ======================================
+
+          img = cv2.fastNlMeansDenoisingColored(
+              img,
+              None,
+              10,
+              10,
+              7,
+              21
+          )
+
+          # ======================================
+          # SAVE
+          # ======================================
+
+          cv2.imwrite(
+              "output/preprocessed.png",
+              img
+          )
+
+          PY
+
+      ##########################################################
+      # AI REDRAW
+      ##########################################################
+
+      - name: AI Vector Redraw
         env:
           STABILITY_API_KEY: ${{ secrets.STABILITY_API_KEY }}
         run: |
 
-          INPUT_FILE="${{ steps.image.outputs.file }}"
+          INPUT_FILE="output/preprocessed.png"
 
           curl -f -sS \
             -X POST \
@@ -76,21 +142,28 @@ jobs:
             -H "Authorization: Bearer ${STABILITY_API_KEY}" \
             -H "Accept: image/*" \
             -F "image=@${INPUT_FILE}" \
-            -F 'prompt=convert this exact image into a clean black and white vector stencil, preserve exact composition, preserve object silhouette, preserve shape, smooth vector edges, monochrome, white background, black subject, professional stencil art, minimal artistic change' \
-            -F 'control_strength=0.95' \
+            -F 'prompt=convert this exact image into a clean black and white vector stencil. preserve original silhouette. preserve object structure. preserve exact composition. ultra clean vector edges. black subject only. pure white background. monochrome. smooth curves. logo style. professional stencil art. remove blur. remove noise. remove texture. preserve recognizable object shape. centered object. high contrast. clean cut shape.' \
+            -F 'negative_prompt=colorful, grayscale shading, painting, watercolor, realistic texture, scenery, wallpaper, artistic reinterpretation, landscape, gray background, blur, fog, smoke, extra objects, abstract art, glitch' \
+            -F 'control_strength=0.98' \
             -F 'seed=1' \
             -o output/final_bw.png
 
       ##########################################################
-      # VERIFY
+      # VALIDATE OUTPUT
       ##########################################################
 
-      - name: Verify Output
+      - name: Validate Output
         run: |
+
+          if [ ! -f output/final_bw.png ]; then
+            echo "Generation failed"
+            exit 1
+          fi
+
           ls -lah output/
 
       ##########################################################
-      # UPLOAD FINAL PNG ONLY
+      # UPLOAD FINAL PNG
       ##########################################################
 
       - name: Upload Final PNG
