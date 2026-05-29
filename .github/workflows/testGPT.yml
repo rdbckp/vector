@@ -1,4 +1,4 @@
-name: Angel BW Clean
+name: BW Vector Clean PNG
 
 on:
   workflow_dispatch:
@@ -44,7 +44,7 @@ jobs:
           file = files[0]
 
           # =========================
-          # LOAD IMAGE
+          # LOAD
           # =========================
 
           img = cv2.imread(file)
@@ -71,84 +71,102 @@ jobs:
           )
 
           # =========================
-          # SMOOTH
+          # CONTRAST BOOST
+          # =========================
+
+          gray = cv2.convertScaleAbs(
+              gray,
+              alpha=2.2,
+              beta=20
+          )
+
+          # =========================
+          # BLUR
           # =========================
 
           blur = cv2.GaussianBlur(
               gray,
-              (9,9),
+              (7,7),
               0
           )
 
           # =========================
-          # BRIGHTNESS MASK
+          # OTSU THRESHOLD
           # =========================
 
-          _, mask = cv2.threshold(
+          _, th = cv2.threshold(
               blur,
-              185,
+              0,
               255,
-              cv2.THRESH_BINARY
+              cv2.THRESH_BINARY + cv2.THRESH_OTSU
           )
-
-          # =========================
-          # CLEANUP
-          # =========================
-
-          kernel = np.ones((5,5), np.uint8)
-
-          mask = cv2.morphologyEx(
-              mask,
-              cv2.MORPH_CLOSE,
-              kernel
-          )
-
-          mask = cv2.morphologyEx(
-              mask,
-              cv2.MORPH_OPEN,
-              kernel
-          )
-
-          # =========================
-          # KEEP ONLY BIGGEST OBJECT
-          # =========================
-
-          contours, _ = cv2.findContours(
-              mask,
-              cv2.RETR_EXTERNAL,
-              cv2.CHAIN_APPROX_SIMPLE
-          )
-
-          clean = np.zeros_like(mask)
-
-          if contours:
-
-              biggest = max(
-                  contours,
-                  key=cv2.contourArea
-              )
-
-              cv2.drawContours(
-                  clean,
-                  [biggest],
-                  -1,
-                  255,
-                  thickness=cv2.FILLED
-              )
 
           # =========================
           # INVERT
           # =========================
 
-          final = 255 - clean
+          th = 255 - th
 
           # =========================
-          # SAVE PNG
+          # MORPH CLEANUP
+          # =========================
+
+          kernel = np.ones((5,5), np.uint8)
+
+          th = cv2.morphologyEx(
+              th,
+              cv2.MORPH_CLOSE,
+              kernel
+          )
+
+          th = cv2.morphologyEx(
+              th,
+              cv2.MORPH_OPEN,
+              kernel
+          )
+
+          # =========================
+          # KEEP BIG OBJECTS ONLY
+          # =========================
+
+          num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
+              th,
+              8
+          )
+
+          clean = np.zeros_like(th)
+
+          for i in range(1, num_labels):
+
+              area = stats[i, cv2.CC_STAT_AREA]
+
+              if area > 5000:
+                  clean[labels == i] = 255
+
+          # =========================
+          # FINAL SMOOTH
+          # =========================
+
+          clean = cv2.GaussianBlur(
+              clean,
+              (5,5),
+              0
+          )
+
+          _, clean = cv2.threshold(
+              clean,
+              127,
+              255,
+              cv2.THRESH_BINARY
+          )
+
+          # =========================
+          # SAVE
           # =========================
 
           cv2.imwrite(
               "output/final_bw.png",
-              final
+              clean
           )
 
           PY
